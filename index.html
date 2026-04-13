@@ -447,8 +447,8 @@ window.onerror=function(msg,src,line,col,err){
               <option value="evening">Evening only</option>
             </select>
           </div>
-          <div class="fg" id="morn-group"><label>Morning (L)</label><input id="m-morn" type="number" min="0" step="0.1" placeholder="0.0" oninput="calcMilkTotal()"></div>
-          <div class="fg" id="eve-group"><label>Evening (L)</label><input id="m-eve" type="number" min="0" step="0.1" placeholder="0.0" oninput="calcMilkTotal()"></div>
+          <div class="fg" id="morn-group"><label>Morning (L)</label><input id="m-morn" type="number" min="0" step="1" placeholder="0" oninput="calcMilkTotal()"></div>
+          <div class="fg" id="eve-group"><label>Evening (L)</label><input id="m-eve" type="number" min="0" step="1" placeholder="0" oninput="calcMilkTotal()"></div>
           <div class="fg"><label>Total</label><div id="m-total-display" style="font-size:22px;font-weight:800;padding:6px 0;color:#0F6E56;">—</div></div>
         </div>
         <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
@@ -865,8 +865,8 @@ window.onerror=function(msg,src,line,col,err){
     <span id="edit-milk-info" style="color:#555;"></span>
   </div>
   <div class="form-grid">
-    <div class="fg"><label>Morning (L)</label><input id="em-morn" type="number" min="0" step="0.1" placeholder="0.0"></div>
-    <div class="fg"><label>Evening (L)</label><input id="em-eve" type="number" min="0" step="0.1" placeholder="0.0"></div>
+    <div class="fg"><label>Morning (L)</label><input id="em-morn" type="number" min="0" step="1" placeholder="0"></div>
+    <div class="fg"><label>Evening (L)</label><input id="em-eve" type="number" min="0" step="1" placeholder="0"></div>
   </div>
   <div style="margin-top:10px;font-size:13px;color:#5a8a78;">Total: <strong id="em-total">—</strong></div>
   <div class="modal-footer">
