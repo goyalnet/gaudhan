@@ -1193,7 +1193,14 @@ async function syncToCloud(){
   setSyncStatus('⟳ Syncing…','#f0a500');
   try{
     await sb.from('gd_animals').upsert(A.map(animalToDb),{onConflict:'tag'});
-    await sb.from('gd_milk').upsert(M.map(milkToDb),{onConflict:'id'});
+    // Milk — only sync last 60 days to avoid timeout
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-60);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    const recentMilk=M.filter(m=>m.date>=cutoffStr);
+    if(recentMilk.length){
+      const {error:milkErr}=await sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id'});
+      if(milkErr)console.warn('Milk sync error:',milkErr);
+    }
     if(P.length)await sb.from('gd_pregnancy').upsert(P.map(pregToDb),{onConflict:'id'});
     if(L.length)await sb.from('gd_lactation').upsert(L.map(lactToDb),{onConflict:'id'});
     if(H.length)await sb.from('gd_health').upsert(H.map(healthToDb),{onConflict:'id'});
@@ -1249,9 +1256,14 @@ async function loadFromCloud(){
 // ── MAIN SAVE — local first, then cloud async ──
 function save(){
   saveLocal();
-  // Debounce cloud sync — wait 800ms after last save
   clearTimeout(window._syncTimer);
   window._syncTimer=setTimeout(syncToCloud,800);
+}
+async function saveMilkNow(){
+  // Save milk immediately — no debounce — critical for data integrity
+  saveLocal();
+  clearTimeout(window._syncTimer);
+  await syncToCloud();
 }
 
 function loadApp(){
@@ -1445,7 +1457,7 @@ function addMilk(){
   const idx=M.findIndex(r=>r.cow===cow&&r.date===date);
   if(idx>=0){const rec=M[idx];if(session==='morning'||session==='both')rec.morn=mo;if(session==='evening'||session==='both')rec.eve=ev;rec.partial=rec.morn===null||rec.eve===null;}
   else{const nr={id:Date.now(),cow,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};nr.partial=nr.morn===null||nr.eve===null;M.push(nr);}
-  save();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();
+  saveMilkNow();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();
   document.getElementById('m-morn').value='';document.getElementById('m-eve').value='';document.getElementById('m-total-display').textContent='—';
   if(document.getElementById('m-session'))document.getElementById('m-session').value='both';
   const msg=document.getElementById('m-save-msg');msg.textContent=session==='morning'?'✓ Morning saved — add evening later':session==='evening'?'✓ Evening added':'✓ Saved';
@@ -1566,7 +1578,7 @@ function importMilkExcel(input){
         const ev=cols[3]&&cols[3]!==''?parseFloat(cols[3]):null;
         const idx=M.findIndex(r=>r.cow===cowTag&&r.date===date);
         if(idx>=0){if(mo!==null)M[idx].morn=mo;if(ev!==null)M[idx].eve=ev;M[idx].partial=M[idx].morn===null||M[idx].eve===null;updated++;}
-        else{M.push({id:Date.now()+Math.random(),cow:cowTag,date,morn:mo,eve:ev,partial:mo===null||ev===null});added++;}
+        else{M.push({id:Date.now()+Math.floor(Math.random()*1000),cow:cowTag,date,morn:mo,eve:ev,partial:mo===null||ev===null});added++;}
       });
       save();render();
       msg.style.color='#0F6E56';
