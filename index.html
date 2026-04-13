@@ -1284,35 +1284,33 @@ async function syncToCloud(){
 
 // ── LOAD FROM CLOUD ──
 async function loadFromCloud(){
-  const sb=await getSBAsync(5000);if(!sb)return false;
   setSyncStatus('⟳ Loading…','#f0a500');
-  // Race against 8 second timeout
-  const timeout=new Promise(resolve=>setTimeout(()=>resolve(null),15000));
+  const headers={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
+  const base=SB_URL+'/rest/v1/';
+  async function fetchTable(table,order){
+    try{
+      const url=base+table+'?select=*'+(order?'&order='+order:'');
+      const r=await fetch(url,{headers});
+      if(!r.ok){console.warn(table+' fetch error:',r.status);return[];}
+      return await r.json();
+    }catch(e){console.warn(table+' fetch exception:',e.message);return[];}
+  }
   try{
-    const result=await Promise.race([
-      Promise.all([
-        sb.from('gd_animals').select('*').order('tag'),
-        sb.from('gd_milk').select('*').order('date',{ascending:false}),
-        sb.from('gd_pregnancy').select('*'),
-        sb.from('gd_lactation').select('*'),
-        sb.from('gd_health').select('*').order('date',{ascending:false}),
-      ]),
-      timeout
+    const [ra,rm,rp,rl,rh,rg]=await Promise.all([
+      fetchTable('gd_animals','tag.asc'),
+      fetchTable('gd_milk','date.desc'),
+      fetchTable('gd_pregnancy',''),
+      fetchTable('gd_lactation',''),
+      fetchTable('gd_health','date.desc'),
+      fetchTable('gd_log','created_at.desc&limit=200'),
     ]);
-    if(!result){setSyncStatus('● Timeout','#e88');console.warn('loadFromCloud timed out');return false;}
-    const [ra,rm,rp,rl,rh]=result;
-    console.log('Cloud load results — animals:',ra.data?.length,'milk:',rm.data?.length,'preg:',rp.data?.length,'lact:',rl.data?.length,'health:',rh.data?.length);
-    if(ra.error)console.warn('Animals error:',ra.error);
-    if(rm.error)console.warn('Milk error:',rm.error);
-    // Always replace — even empty arrays (deleted records must stay deleted)
-    A=ra.data?ra.data.map(dbToAnimal):[];
-    M=rm.data?rm.data.map(dbToMilk):[];
-    P=rp.data?rp.data.map(dbToPreg):[];
-    L=rl.data?rl.data.map(dbToLact):[];
-    H=rh.data?rh.data.map(dbToHealth):[];
-    const rg=await sb.from('gd_log').select('*').order('created_at',{ascending:false}).limit(200);
-    G=rg.data?rg.data.map(dbToLog):[];
-    // Always save to localStorage — overwrites any stale cached data
+    console.log('Loaded — animals:',ra.length,'milk:',rm.length,'preg:',rp.length,'lact:',rl.length,'health:',rh.length,'log:',rg.length);
+    A=ra.map(dbToAnimal);
+    M=rm.map(dbToMilk);
+    P=rp.map(dbToPreg);
+    L=rl.map(dbToLact);
+    H=rh.map(dbToHealth);
+    G=rg.map(dbToLog);
     saveLocal();
     localStorage.setItem('gd2-has-real-data','1');
     setSyncStatus('✓ Loaded','#1D9E75');
@@ -1320,7 +1318,7 @@ async function loadFromCloud(){
     return true;
   }catch(err){
     setSyncStatus('● Load error','#e88');
-    console.warn('Supabase load error:',err);
+    console.warn('loadFromCloud error:',err);
     return false;
   }
 }
