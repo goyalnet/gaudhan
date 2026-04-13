@@ -347,6 +347,7 @@ window.onerror=function(msg,src,line,col,err){
       <div class="tab" onclick="showTab('departures')">Departures</div>
       <div class="tab" onclick="showTab('alerts')">🔔 Alerts <span id="alert-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:3px;"></span></div>
       <div class="tab" id="log-tab" onclick="showTab('log')">Log</div>
+      <div class="tab" id="users-tab" onclick="showTab('users')">👥 Users</div>
     </div>
     <div class="topbar-right">
       <input id="global-search" type="text" placeholder="🔍 Search..." oninput="globalSearch()" style="padding:5px 10px;font-size:12px;border:1px solid rgba(255,255,255,0.3);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;width:130px;outline:none;" onfocus="this.style.background='rgba(255,255,255,0.25)'" onblur="this.style.background='rgba(255,255,255,0.15)'">
@@ -632,6 +633,21 @@ window.onerror=function(msg,src,line,col,err){
       </div>
     </div>
 
+    <!-- USERS SECTION -->
+    <div id="users" class="section">
+      <div class="card">
+        <div class="section-head">
+          <h3>👥 User Management</h3>
+          <button class="btn btn-primary" onclick="openModal('add-user-modal')">+ Add User</button>
+        </div>
+        <div class="info-banner">Manage app users, roles and passwords. Only Admin can access this section.</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Name</th><th>Username</th><th>Role</th><th>Status</th><th>Last login</th><th></th></tr></thead>
+          <tbody id="users-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+
   </div><!-- /main -->
 </div><!-- /app-wrap -->
 
@@ -857,6 +873,61 @@ window.onerror=function(msg,src,line,col,err){
   </div>
   <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="eh-notes"></textarea></div>
   <div class="modal-footer"><button class="btn" onclick="closeModal('edit-health-modal')">Cancel</button><button class="btn btn-primary" onclick="saveEditHealth()">Save changes</button></div>
+</div></div>
+
+<!-- ADD USER MODAL -->
+<div class="modal-bg" id="add-user-modal"><div class="modal" style="max-width:420px;">
+  <h3>Add New User</h3>
+  <div class="form-grid">
+    <div class="fg"><label>Full name *</label><input id="nu-name" placeholder="e.g. Ramesh Kumar"></div>
+    <div class="fg"><label>Username *</label><input id="nu-username" placeholder="e.g. ramesh" autocapitalize="none"></div>
+    <div class="fg"><label>Password *</label><input id="nu-password" type="password" placeholder="Min 6 characters"></div>
+    <div class="fg"><label>Role *</label>
+      <select id="nu-role">
+        <option value="admin">Admin — Full access</option>
+        <option value="manager">Manager — All tabs, no Remove</option>
+        <option value="milk">Milk worker — Milk tab only</option>
+        <option value="vet">Vet — Animals + Health</option>
+        <option value="viewer" selected>Viewer — Read only</option>
+      </select>
+    </div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn" onclick="closeModal('add-user-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="addUser()">Add User</button>
+  </div>
+</div></div>
+
+<!-- EDIT USER MODAL -->
+<div class="modal-bg" id="edit-user-modal"><div class="modal" style="max-width:420px;">
+  <h3>Edit User</h3>
+  <div class="form-grid">
+    <div class="fg"><label>Full name *</label><input id="eu-name"></div>
+    <div class="fg"><label>Username</label><input id="eu-username" disabled style="background:#f5f5f0;"></div>
+    <div class="fg"><label>Role *</label>
+      <select id="eu-role">
+        <option value="admin">Admin — Full access</option>
+        <option value="manager">Manager — All tabs, no Remove</option>
+        <option value="milk">Milk worker — Milk tab only</option>
+        <option value="vet">Vet — Animals + Health</option>
+        <option value="viewer">Viewer — Read only</option>
+      </select>
+    </div>
+    <div class="fg"><label>Status</label>
+      <select id="eu-active">
+        <option value="true">Active</option>
+        <option value="false">Inactive</option>
+      </select>
+    </div>
+  </div>
+  <div style="border-top:1px dashed #e0e0d8;margin-top:12px;padding-top:12px;">
+    <div style="font-size:12px;font-weight:600;color:#666;margin-bottom:8px;">Reset Password (optional)</div>
+    <div class="fg"><input id="eu-password" type="password" placeholder="Leave blank to keep current password"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn" onclick="closeModal('edit-user-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveEditUser()">Save changes</button>
+  </div>
 </div></div>
 
 <div class="modal-bg" id="edit-milk-modal"><div class="modal" style="max-width:420px;">
@@ -1094,7 +1165,7 @@ const USERS = [
 
 // ── ROLE PERMISSIONS ──
 const ROLE_PERMS = {
-  admin:   {tabs:['dashboard','animals','pregnancy','lactation','health','milk','log','departures','alerts'], canAdd:true,  canEdit:true,  canRemove:true,  canExport:true},
+  admin:   {tabs:['dashboard','animals','pregnancy','lactation','health','milk','log','departures','alerts','users'], canAdd:true,  canEdit:true,  canRemove:true,  canExport:true},
   manager: {tabs:['dashboard','animals','pregnancy','lactation','health','milk','departures','alerts'], canAdd:true,  canEdit:true,  canRemove:false, canExport:true},
   milk:    {tabs:['dashboard','milk','alerts'],                                                               canAdd:false, canEdit:false, canRemove:false, canExport:false},
   vet:     {tabs:['dashboard','animals','pregnancy','lactation','health','alerts'],                           canAdd:false, canEdit:false, canRemove:false, canExport:false},
@@ -1117,14 +1188,38 @@ function applyRBAC(){
   document.querySelectorAll('[data-role-export]').forEach(el=>el.style.display=perms.canExport?'':'none');
 }
 
-function doLogin(){
+async function doLogin(){
   const username=(document.getElementById('login-username')?.value||'').trim().toLowerCase();
   const password=(document.getElementById('login-password')?.value||'').trim();
   const err=document.getElementById('login-error');
-  const user=USERS.find(u=>u.username===username&&u.password===password);
+  if(!username||!password){err.style.display='block';return;}
+
+  // Try Supabase users first
+  let user=null;
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_users?username=eq.'+encodeURIComponent(username)+'&active=eq.true&select=*',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(r.ok){
+      const data=await r.json();
+      if(data.length&&data[0].password===password){
+        user={username:data[0].username,password:data[0].password,role:data[0].role,name:data[0].name,id:data[0].id};
+        // Update last_login
+        fetch(SB_URL+'/rest/v1/gd_users?id=eq.'+data[0].id,{
+          method:'PATCH',
+          headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json'},
+          body:JSON.stringify({last_login:new Date().toISOString()})
+        }).catch(()=>{});
+      }
+    }
+  }catch(e){console.warn('Supabase login check failed, using local:',e);}
+
+  // Fallback to hardcoded USERS if Supabase unavailable
+  if(!user) user=USERS.find(u=>u.username===username&&u.password===password);
+
   if(!user){err.style.display='block';return;}
   err.style.display='none';
-  saveRememberMe(username, password);
+  saveRememberMe(username,password);
   currentUser=user.name; currentRole=user.role;
   document.getElementById('tb-name').textContent=user.name;
   const rb=document.getElementById('tb-role');
@@ -1162,6 +1257,8 @@ function doLogin(){
       } else {
         setSyncStatus('● Local','#aaa');
       }
+      // Load users for admin
+      if(currentRole==='admin')loadUsers();
     }).catch(()=>setSyncStatus('● Local','#aaa'));
   }, 100);
 }
@@ -1375,7 +1472,7 @@ function loadApp(){
   populateCows();render();
 }
 
-const TABS={dashboard:0,animals:1,lactation:2,pregnancy:3,health:4,milk:5,departures:6,alerts:7,log:8};
+const TABS={dashboard:0,animals:1,lactation:2,pregnancy:3,health:4,milk:5,departures:6,alerts:7,log:8,users:9};
 function showTab(id,ft){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');const tabEls=document.querySelectorAll('.tabs .tab');if(tabEls[TABS[id]])tabEls[TABS[id]].classList.add('active');if(ft!==undefined){const el=document.getElementById('filter-type');if(el)el.value=ft;}render();if(id==='milk'){const bd=document.getElementById('bulk-date');if(bd&&!bd.value)bd.value=today();renderBulkMilk();}window.scrollTo({top:0,behavior:'instant'});}
 function openModal(id){document.getElementById(id).classList.add('open');}
 function closeModal(id){document.getElementById(id).classList.remove('open');}
@@ -1882,7 +1979,130 @@ function saveEditHealth(){
 function showDetail(tag){
   editingDetailTag=tag;const a=A.find(x=>x.tag===tag);if(!a)return;document.getElementById('detail-title').textContent=(a.name?a.name+' — ':'')+a.tag;const aP=P.filter(p=>p.cow===tag),aL=L.filter(l=>l.cow===tag),aH=H.filter(h=>h.tag===tag),aM=M.filter(m=>m.cow===tag).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7);const fA=A.find(x=>x.tag===a.sire),mA=A.find(x=>x.tag===a.dam),off=A.filter(x=>x.sire===tag||x.dam===tag);let html=`<div class="detail-top">${detailPhotoHtml(a.photo,a.type)}<div class="detail-top-info"><div class="ds" style="margin-bottom:0;"><h4>Profile</h4><div class="dg"><div class="di"><span>Tag Sl. No.</span>${a.tagSlNo||'—'}</div><div class="di"><span>Tag</span>${a.tag}</div><div class="di"><span>Name</span>${a.name||'—'}</div><div class="di"><span>Type</span>${tb(a.type)}</div><div class="di"><span>Breed</span>${a.breed||'—'}</div><div class="di"><span>DOB</span>${fmt(a.dob)}</div><div class="di"><span>Sex</span>${a.sex||'—'}</div><div class="di"><span>Status</span>${sb(a.status)}</div><div class="di"><span>Lactation #</span>${a.lactnum||'—'}</div><div class="di"><span>Added via</span>${a.reason==='Donation'?'<span class="badge badge-donation">Donation</span>':a.reason||'—'}</div><div class="di"><span>Added on</span>${fmt(a.adddate)}</div>${a.reason==='Donation'?`<div class="di"><span>Donor</span>${a.donor||'—'}</div><div class="di"><span>Donation date</span>${fmt(a.dondate)}</div>`:''}</div></div></div></div>`;html+=`<div class="ds"><h4>Pedigree</h4><div class="dg"><div class="di"><span>Father</span>${a.sire?(fA?`<button class="lb" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${a.sire}'),100)">${a.sire}${fA.name?' — '+fA.name:''}</button>`:a.sire):'—'}</div><div class="di"><span>Mother</span>${a.dam?(mA?`<button class="lb" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${a.dam}'),100)">${a.dam}${mA.name?' — '+mA.name:''}</button>`:a.dam):'—'}</div></div>${off.length?`<div style="margin-top:8px;font-size:13px;"><span style="font-size:11px;color:#888;">Offspring: </span>${off.map(o=>`<button class="lb" style="margin-right:8px;" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${o.tag}'),100)">${o.tag}${o.name?' ('+o.name+')':''}</button>`).join('')}</div>`:''}</div>`;if(aM.length)html+=`<div class="ds"><h4>Recent milk records</h4><table><thead><tr><th>Date</th><th>Morning</th><th>Evening</th><th>Total</th></tr></thead><tbody>${aM.map(m=>`<tr><td>${fmt(m.date)}</td><td>${fl(m.morn)}</td><td>${fl(m.eve)}</td><td><strong>${(parseFloat(m.morn||0)+parseFloat(m.eve||0)).toFixed(1)}L</strong></td></tr>`).join('')}</tbody></table></div>`;if(aP.length)html+=`<div class="ds"><h4>Pregnancy records</h4><table><thead><tr><th>Insem.</th><th>Expected delivery</th><th>Method</th><th>Status</th><th>Calf / Heifer</th></tr></thead><tbody>${aP.map(p=>`<tr><td>${fmt(p.insem)}</td><td>${fmt(p.calving)}</td><td>${p.method}</td><td>${sb(p.status)}</td><td>${p.outcome||'—'}</td></tr>`).join('')}</tbody></table></div>`;if(aL.length)html+=`<div class="ds"><h4>Lactation records</h4><table><thead><tr><th>Cycle #</th><th>Source</th><th>Start</th><th>End</th><th>Total (L)</th><th>Peak</th></tr></thead><tbody>${aL.sort((a,b)=>(parseInt(a.num)||0)-(parseInt(b.num)||0)).map(l=>`<tr><td>${l.num||'—'}</td><td>${l.source==='auto'?'<span class="badge badge-auto">auto</span>':'Manual'}</td><td>${fmt(l.start)}</td><td>${fmt(l.end)}</td><td>${l.total?Number(l.total).toLocaleString():'—'}</td><td>${l.peak||'—'}</td></tr>`).join('')}</tbody></table></div>`;if(aH.length)html+=`<div class="ds"><h4>Health records</h4><table><thead><tr><th>Date</th><th>Type</th><th>Condition</th><th>Treatment</th><th>Next due</th></tr></thead><tbody>${aH.map(h=>`<tr><td>${fmt(h.date)}</td><td>${h.type}</td><td>${h.diag||'—'}</td><td>${h.drug||'—'}</td><td>${fmt(h.next)}</td></tr>`).join('')}</tbody></table></div>`;if(a.status==='Inactive'){let dep='';if(a.delreason==='Sold')dep=`<div class="di"><span>Purchaser</span>${a.delpurchaser||'—'}</div><div class="di"><span>Price</span>${a.delprice?'₹'+Number(a.delprice).toLocaleString():'—'}</div>`;else if(a.delreason?.startsWith('Died'))dep=`<div class="di"><span>Cause</span>${a.delcause||'—'}</div>`;else if(a.delreason==='Transfer out')dep=`<div class="di"><span>Destination</span>${a.deldestination||'—'}</div>`;else if(a.delreason==='Donated')dep=`<div class="di"><span>Donated to</span>${a.deldonateto||'—'}</div>`;html+=`<div class="ds"><h4>Departure details</h4><div class="dg"><div class="di"><span>Date</span>${fmt(a.deldate)}</div><div class="di"><span>Reason</span>${rb(a.delreason)}</div>${dep}<div class="di"><span>Notes</span>${a.delnotes||'—'}</div></div></div>`;}document.getElementById('detail-body').innerHTML=html;const editBtn=document.getElementById('detail-edit-btn');if(editBtn)editBtn.style.display=a.status==='Inactive'?'none':'inline-block';openModal('detail-modal');}
 
-function render(){renderAlerts();rMetrics();renderOvMilk();renderOvPreg();renderOvHealth();renderOvLog();renderOvLact();renderOvDep();renderMilkMetrics();renderMilk();renderMilkSummary();renderDailyReport();renderAnimals();renderPreg();renderLact();renderHealth();renderLog();renderDep();}
+function render(){renderAlerts();rMetrics();renderOvMilk();renderOvPreg();renderOvHealth();renderOvLog();renderOvLact();renderOvDep();renderMilkMetrics();renderMilk();renderMilkSummary();renderDailyReport();renderAnimals();renderPreg();renderLact();renderHealth();renderLog();renderDep();renderUsers();}
+
+// ── USER MANAGEMENT ──
+let editingUserId=null;
+let cloudUsers=[]; // users loaded from Supabase
+
+async function loadUsers(){
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_users?select=*&order=name.asc',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(r.ok){cloudUsers=await r.json();renderUsers();}
+  }catch(e){console.warn('Load users error:',e);}
+}
+
+function renderUsers(){
+  const t=document.getElementById('users-table');if(!t)return;
+  const roleLabel={admin:'Admin',manager:'Manager',milk:'Milk worker',vet:'Vet',viewer:'Viewer'};
+  const roleColor={admin:'#0F6E56',manager:'#2980b9',milk:'#8e44ad',vet:'#e67e22',viewer:'#7f8c8d'};
+  if(!cloudUsers.length){
+    t.innerHTML='<tr><td colspan="6" class="empty">No users found. Add users above.</td></tr>';
+    return;
+  }
+  t.innerHTML=cloudUsers.map(u=>`
+    <tr style="${!u.active?'opacity:0.5;':''}">
+      <td><strong>${u.name}</strong></td>
+      <td style="font-size:12px;color:#666;">${u.username}</td>
+      <td><span style="font-size:11px;font-weight:700;color:#fff;background:${roleColor[u.role]||'#888'};padding:2px 8px;border-radius:10px;">${roleLabel[u.role]||u.role}</span></td>
+      <td><span class="badge ${u.active?'badge-active':'badge-inactive'}">${u.active?'Active':'Inactive'}</span></td>
+      <td style="font-size:11px;color:#aaa;">${u.last_login?fmt(u.last_login.slice(0,10)):'Never'}</td>
+      <td style="white-space:nowrap;">
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-sm" style="font-size:10px;padding:3px 7px;" onclick="openEditUser(${u.id})">✏ Edit</button>
+          ${u.username!=='admin'?`<button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 7px;" onclick="deleteUser(${u.id},'${u.name}')">🗑</button>`:''}
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+async function addUser(){
+  const name=document.getElementById('nu-name').value.trim();
+  const username=document.getElementById('nu-username').value.trim().toLowerCase();
+  const password=document.getElementById('nu-password').value.trim();
+  const role=document.getElementById('nu-role').value;
+  if(!name){alert('Name required.');return;}
+  if(!username){alert('Username required.');return;}
+  if(!password||password.length<6){alert('Password must be at least 6 characters.');return;}
+  if(cloudUsers.find(u=>u.username===username)){alert('Username already exists.');return;}
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_users',{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify({username,password,name,role,active:true})
+    });
+    if(r.ok){
+      const data=await r.json();
+      cloudUsers.push(data[0]);
+      renderUsers();
+      closeModal('add-user-modal');
+      ['nu-name','nu-username','nu-password'].forEach(id=>document.getElementById(id).value='');
+      document.getElementById('nu-role').value='viewer';
+      alert('✓ User "'+name+'" added successfully.');
+    } else {
+      const e=await r.json();
+      alert('Error: '+JSON.stringify(e));
+    }
+  }catch(e){alert('Network error: '+e.message);}
+}
+
+function openEditUser(id){
+  const u=cloudUsers.find(x=>x.id===id);if(!u)return;
+  editingUserId=id;
+  document.getElementById('eu-name').value=u.name;
+  document.getElementById('eu-username').value=u.username;
+  document.getElementById('eu-role').value=u.role;
+  document.getElementById('eu-active').value=String(u.active);
+  document.getElementById('eu-password').value='';
+  openModal('edit-user-modal');
+}
+
+async function saveEditUser(){
+  const u=cloudUsers.find(x=>x.id===editingUserId);if(!u)return;
+  const name=document.getElementById('eu-name').value.trim();
+  const role=document.getElementById('eu-role').value;
+  const active=document.getElementById('eu-active').value==='true';
+  const password=document.getElementById('eu-password').value.trim();
+  if(!name){alert('Name required.');return;}
+  const updates={name,role,active};
+  if(password){
+    if(password.length<6){alert('Password must be at least 6 characters.');return;}
+    updates.password=password;
+  }
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_users?id=eq.'+editingUserId,{
+      method:'PATCH',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'return=representation'},
+      body:JSON.stringify(updates)
+    });
+    if(r.ok){
+      Object.assign(u,updates);
+      renderUsers();
+      closeModal('edit-user-modal');
+      editingUserId=null;
+      alert('✓ User updated successfully.');
+    } else {
+      const e=await r.json();
+      alert('Error: '+JSON.stringify(e));
+    }
+  }catch(e){alert('Network error: '+e.message);}
+}
+
+async function deleteUser(id,name){
+  if(!confirm('Delete user "'+name+'"? This cannot be undone.'))return;
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_users?id=eq.'+id,{
+      method:'DELETE',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(r.ok){
+      cloudUsers=cloudUsers.filter(u=>u.id!==id);
+      renderUsers();
+    }
+  }catch(e){alert('Network error: '+e.message);}
+}
 
 function generateAlerts(){
   const alerts=[];
