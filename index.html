@@ -1594,10 +1594,22 @@ function saveMilkEdit(){
   const r=M.find(x=>x.id===editingMilkId);if(!r){closeModal('edit-milk-modal');return;}
   const moRaw=document.getElementById('em-morn').value;
   const evRaw=document.getElementById('em-eve').value;
-  r.morn=moRaw!==''?parseFloat(moRaw):null;
-  r.eve=evRaw!==''?parseFloat(evRaw):null;
-  r.partial=r.morn===null||r.eve===null;
-  save();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();
+  const mo=moRaw!==''?parseFloat(moRaw):null;
+  const ev=evRaw!==''?parseFloat(evRaw):null;
+  // If both are zero or empty — remove record entirely (cow not milked)
+  if((mo===null||mo===0)&&(ev===null||ev===0)){
+    M=M.filter(x=>x.id!==editingMilkId);
+    // Also delete from Supabase
+    const qurl=SB_URL+'/rest/v1/gd_milk?id=eq.'+editingMilkId;
+    fetch(qurl,{method:'DELETE',headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}})
+    .catch(e=>console.warn('Delete milk error:',e));
+  } else {
+    r.morn=mo;
+    r.eve=ev;
+    r.partial=r.morn===null||r.eve===null;
+    save();
+  }
+  renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();
   closeModal('edit-milk-modal');
   editingMilkId=null;
 }
@@ -2361,7 +2373,7 @@ function saveBulkMilk(){
     const eveEl=document.getElementById('bm-eve-'+c.tag);
     const mo=mornEl&&mornEl.value!==''?parseInt(mornEl.value):null;
     const ev=eveEl&&eveEl.value!==''?parseInt(eveEl.value):null;
-    if(mo===null&&ev===null)return;
+    if((mo===null||mo===0)&&(ev===null||ev===0))return; // skip blank or zero rows
     const idx=M.findIndex(r=>r.cow===c.tag&&r.date===date);
     if(idx>=0){
       if(session==='morning'||session==='both'){if(mo!==null)M[idx].morn=mo;}
