@@ -1218,7 +1218,7 @@ async function loadFromCloud(){
   const sb=await getSBAsync(5000);if(!sb)return false;
   setSyncStatus('⟳ Loading…','#f0a500');
   // Race against 8 second timeout
-  const timeout=new Promise(resolve=>setTimeout(()=>resolve(null),8000));
+  const timeout=new Promise(resolve=>setTimeout(()=>resolve(null),15000));
   try{
     const result=await Promise.race([
       Promise.all([
@@ -1230,8 +1230,11 @@ async function loadFromCloud(){
       ]),
       timeout
     ]);
-    if(!result){setSyncStatus('● Timeout','#e88');return false;}
+    if(!result){setSyncStatus('● Timeout','#e88');console.warn('loadFromCloud timed out');return false;}
     const [ra,rm,rp,rl,rh]=result;
+    console.log('Cloud load results — animals:',ra.data?.length,'milk:',rm.data?.length,'preg:',rp.data?.length,'lact:',rl.data?.length,'health:',rh.data?.length);
+    if(ra.error)console.warn('Animals error:',ra.error);
+    if(rm.error)console.warn('Milk error:',rm.error);
     // Always replace — even empty arrays (deleted records must stay deleted)
     A=ra.data?ra.data.map(dbToAnimal):[];
     M=rm.data?rm.data.map(dbToMilk):[];
@@ -1281,11 +1284,13 @@ function saveMilkNow(){
       return;
     }
     sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id'})
-    .then(({error})=>{
+    .then(({data,error})=>{
+      console.log('Milk upsert result — data:',data,'error:',error);
+      console.log('Records sent:',JSON.stringify(recentMilk.map(milkToDb)));
       if(error){
         console.warn('Milk save error:',error);
-        if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Cloud save failed — '+error.message;}
-        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },5000);
+        if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Error: '+error.message+' (code:'+error.code+')';}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },8000);
       } else {
         if(msg){msg.style.color='#1D9E75';msg.textContent='✓ Saved to cloud';}
         setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },3000);
