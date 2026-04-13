@@ -2372,13 +2372,13 @@ function saveBulkMilk(){
       if(session==='evening'||session==='both'){if(ev!==null)M[idx].eve=ev;}
       M[idx].partial=M[idx].morn===null||M[idx].eve===null;
     } else {
-      const nr={id:Date.now()+Math.random(),cow:c.tag,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};
+      const nr={id:Date.now()+Math.floor(Math.random()*1000),cow:c.tag,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};
       nr.partial=nr.morn===null||nr.eve===null;
       M.push(nr);
     }
     saved++;
   });
-  save();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();renderBulkMilk();
+  saveMilkNow();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();renderBulkMilk();
   const msg=document.getElementById('bulk-save-msg');
   msg.textContent=saved>0?`✓ Saved ${saved} cow${saved>1?'s':''}`:' No values entered';
   setTimeout(()=>msg.textContent='',3000);
