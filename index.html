@@ -51,26 +51,27 @@ window.supabase={
         upsert:async function(rows,opts){
           const conflict=opts&&opts.onConflict?opts.onConflict:'id';
           const rowArr=Array.isArray(rows)?rows:[rows];
+          // Supabase REST upsert: POST with on_conflict as query param
+          const qurl=url+'/rest/v1/'+this._table+'?on_conflict='+conflict;
           try{
-            const r=await fetch(url+'/rest/v1/'+this._table,{
+            const r=await fetch(qurl,{
               method:'POST',
               headers:{
                 'apikey':key,
                 'Authorization':'Bearer '+key,
                 'Content-Type':'application/json',
-                'Prefer':'resolution=merge-duplicates,return=minimal',
-                'on-conflict':conflict
+                'Prefer':'resolution=merge-duplicates,return=minimal'
               },
               body:JSON.stringify(rowArr)
             });
             if(!r.ok){
-              let e;try{e=await r.json();}catch(ex){e={message:r.statusText,status:r.status};}
-              console.warn('Upsert '+this._table+' error:',r.status,JSON.stringify(e));
+              let e;try{e=await r.json();}catch(ex){e={message:r.statusText};}
+              console.warn('Upsert '+this._table+' failed:',r.status,JSON.stringify(e));
               return{data:null,error:e};
             }
             return{data:null,error:null};
           }catch(e){
-            console.warn('Upsert fetch error:',e.message);
+            console.warn('Upsert catch:',e.message);
             return{data:null,error:{message:e.message}};
           }
         },
