@@ -1,0 +1,2471 @@
+<!-- GauDhan v3.0 INLINE-CLIENT 20260413-1755 -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#1D9E75">
+<title>GauDhan — Gauvansh Management System</title>
+<script>
+// Load SheetJS asynchronously
+(function(){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.async=true;document.head.appendChild(s);})();
+
+// ── MINIMAL SUPABASE REST CLIENT (no CDN needed) ──
+// Talks directly to Supabase REST API using fetch
+window._sbReady=true; // always ready — no library needed
+window.supabase={
+  createClient:function(url,key){
+    const h={'apikey':key,'Authorization':'Bearer '+key,'Content-Type':'application/json','Prefer':'return=representation'};
+    function rest(table){
+      return {
+        _table:table,_filters:[],_order:null,_lim:null,_sel:'*',
+        select:function(s){this._sel=s||'*';return this;},
+        order:function(col,opts){this._order=col+(opts&&opts.ascending===false?'.desc':'.asc');return this;},
+        limit:function(n){this._lim=n;return this;},
+        eq:function(col,val){this._filters.push(col+'=eq.'+val);return this;},
+        neq:function(col,val){this._filters.push(col+'=neq.'+val);return this;},
+        gt:function(col,val){this._filters.push(col+'=gt.'+val);return this;},
+        gte:function(col,val){this._filters.push(col+'=gte.'+val);return this;},
+        maybeSingle:async function(){
+          const r=await this._exec('GET');
+          const d=await r.json();
+          if(!r.ok)return{data:null,error:d};
+          return{data:Array.isArray(d)&&d.length?d[0]:null,error:null};
+        },
+        single:async function(){return this.maybeSingle();},
+        _exec:async function(method,body){
+          let q=url+'/rest/v1/'+this._table+'?select='+this._sel;
+          this._filters.forEach(f=>q+='&'+f);
+          if(this._order)q+='&order='+this._order;
+          if(this._lim)q+='&limit='+this._lim;
+          const opts={method,headers:h};
+          if(body)opts.body=JSON.stringify(body);
+          return fetch(q,opts);
+        },
+        then:function(resolve,reject){
+          return this._exec('GET').then(async r=>{
+            const d=await r.json();
+            if(!r.ok)return resolve({data:null,error:d});
+            resolve({data:d,error:null});
+          }).catch(reject);
+        },
+        upsert:async function(rows,opts){
+          const conflict=opts&&opts.onConflict?opts.onConflict:'id';
+          const rowArr=Array.isArray(rows)?rows:[rows];
+          // Supabase REST upsert: POST with on_conflict as query param
+          const qurl=url+'/rest/v1/'+this._table+'?on_conflict='+conflict;
+          try{
+            const r=await fetch(qurl,{
+              method:'POST',
+              headers:{
+                'apikey':key,
+                'Authorization':'Bearer '+key,
+                'Content-Type':'application/json',
+                'Prefer':'resolution=merge-duplicates,return=minimal'
+              },
+              body:JSON.stringify(rowArr)
+            });
+            if(!r.ok){
+              let e;try{e=await r.json();}catch(ex){e={message:r.statusText};}
+              console.warn('Upsert '+this._table+' failed:',r.status,JSON.stringify(e));
+              return{data:null,error:e};
+            }
+            return{data:null,error:null};
+          }catch(e){
+            console.warn('Upsert catch:',e.message);
+            return{data:null,error:{message:e.message}};
+          }
+        },
+        insert:async function(rows){
+          const hdrs={...h,'Prefer':'return=representation'};
+          try{
+            const r=await fetch(url+'/rest/v1/'+this._table,{
+              method:'POST',headers:hdrs,
+              body:JSON.stringify(Array.isArray(rows)?rows:[rows])
+            });
+            const d=await r.json();
+            if(!r.ok)return{data:null,error:d};
+            return{data:d,error:null};
+          }catch(e){return{data:null,error:{message:e.message}};}
+        },
+        delete:async function(){
+          let q=url+'/rest/v1/'+this._table+'?';
+          this._filters.forEach((f,i)=>q+=(i?'&':'')+f);
+          try{
+            const r=await fetch(q,{method:'DELETE',headers:h});
+            if(!r.ok){const e=await r.json();return{error:e};}
+            return{error:null};
+          }catch(e){return{error:{message:e.message}};}
+        }
+      };
+    }
+    return{from:function(table){return rest(table);}};
+  }
+};
+</script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#f5f5f0;color:#1a1a1a;font-size:14px;line-height:1.5;}
+input,select,textarea,button{font-family:inherit;font-size:14px;}
+input,select,textarea{width:100%;padding:9px 11px;border:1px solid #d0d0c8;border-radius:8px;background:#fff;color:#1a1a1a;outline:none;}
+input:focus,select:focus,textarea:focus{border-color:#1D9E75;box-shadow:0 0 0 3px rgba(29,158,117,0.12);}
+textarea{resize:vertical;min-height:64px;}
+
+/* ===== LOGIN ===== */
+.login-page{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;background:linear-gradient(160deg,#e8f7f2 0%,#f5f5f0 60%);}
+.login-card{background:#fff;border:1px solid #e0e0d8;border-radius:16px;padding:2.5rem 2rem;width:100%;max-width:420px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,0.07);}
+.login-logo{width:80px;height:80px;border-radius:50%;background:linear-gradient(135deg,#E1F5EE,#9FE1CB);display:flex;align-items:center;justify-content:center;font-size:40px;margin:0 auto 1rem;}
+.login-farm-name{font-size:32px;font-weight:600;color:#0F6E56;letter-spacing:2px;}
+.login-tagline{font-size:13px;color:#888;margin-top:4px;font-style:italic;min-height:18px;}
+.login-divider{width:48px;height:3px;background:#1D9E75;border-radius:2px;margin:1rem auto;}
+.login-subtitle{font-size:13px;color:#666;margin-bottom:1.5rem;}
+.login-form{text-align:left;}
+.login-form .fg{display:flex;flex-direction:column;gap:4px;margin-bottom:1rem;}
+.login-form label{font-size:12px;color:#666;font-weight:500;}
+.btn-login{width:100%;padding:12px;background:#1D9E75;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;margin-top:0.5rem;transition:background 0.15s;}
+.btn-login:hover{background:#0F6E56;}
+.login-error{font-size:12px;color:#c0392b;margin-top:6px;display:none;}
+.login-footer{margin-top:1.5rem;font-size:11px;color:#aaa;}
+
+/* ===== APP ===== */
+.app-wrap{display:none;}
+.topbar{display:flex;align-items:center;gap:8px;padding:0.6rem 1rem;background:linear-gradient(135deg,#0a5a44,#1D9E75);position:sticky;top:0;z-index:50;overflow-x:auto;-webkit-overflow-scrolling:touch;}
+.topbar-brand{display:flex;align-items:center;gap:8px;flex-shrink:0;margin-right:8px;}
+.tabs{display:flex;gap:4px;flex-shrink:0;}
+.topbar-logo{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;}
+.topbar-farm{font-size:15px;font-weight:800;color:#fff;letter-spacing:2px;text-transform:uppercase;line-height:1.2;white-space:nowrap;}
+.topbar-app{font-size:10px;color:rgba(255,255,255,0.75);letter-spacing:0.3px;margin-top:1px;font-weight:500;white-space:nowrap;}
+.tab{padding:5px 11px;border:1px solid rgba(255,255,255,0.3);border-radius:6px;font-size:12px;cursor:pointer;background:rgba(255,255,255,0.1);color:rgba(255,255,255,0.9);transition:all 0.15s;white-space:nowrap;flex-shrink:0;}
+.tab.active{background:#fff;color:#0F6E56;border-color:#fff;font-weight:600;}
+.tab:hover:not(.active){background:rgba(255,255,255,0.25);color:#fff;}
+.topbar-right{display:flex;align-items:center;gap:6px;flex-shrink:0;margin-left:auto;}
+.user-pill{display:flex;align-items:center;gap:5px;padding:4px 10px;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:20px;font-size:12px;color:#fff;white-space:nowrap;}
+.role-badge{font-size:10px;padding:1px 6px;border-radius:10px;font-weight:600;}
+.role-admin{background:#E1F5EE;color:#0F6E56;}
+.role-user{background:#E6F1FB;color:#185FA5;}
+.btn-logout{font-size:12px;padding:4px 10px;border:1px solid rgba(255,255,255,0.35);border-radius:6px;cursor:pointer;background:rgba(255,255,255,0.1);color:#fff;white-space:nowrap;}
+.btn-logout:hover{background:rgba(255,255,255,0.25);}
+
+/* ===== LAYOUT ===== */
+.main{max-width:1040px;margin:0 auto;padding:1rem 1rem 2rem;}
+.section{display:none;}.section.active{display:block;}
+.card{background:#fff;border:1px solid #e8e8e0;border-radius:12px;padding:1rem 1.25rem;margin-bottom:1rem;}
+.card-link{cursor:pointer;transition:all 0.15s;}
+.card-link:hover{border-color:#1D9E75;box-shadow:0 2px 8px rgba(29,158,117,0.08);}
+.section-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.875rem;flex-wrap:wrap;gap:8px;}
+.section-head h3{font-size:15px;font-weight:600;color:#1a1a1a;}
+.section-head-note{font-size:11px;font-weight:400;color:#aaa;margin-left:6px;}
+.section-head-actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;}
+.fg{display:flex;flex-direction:column;gap:4px;}
+.fg label{font-size:12px;color:#666;font-weight:500;}
+.form-hint{font-size:11px;color:#aaa;margin-top:2px;}
+
+/* ===== BUTTONS ===== */
+.btn{padding:7px 16px;border:1px solid #d0d0c8;border-radius:8px;font-size:13px;cursor:pointer;background:#fff;color:#333;transition:all 0.15s;}
+.btn:hover{background:#f5f5f0;}
+.btn-primary{background:#1D9E75;color:#fff;border-color:#1D9E75;}
+.btn-primary:hover{background:#0F6E56;}
+.btn-danger{background:#fef2f2;color:#c0392b;border-color:#f5b7b1;font-size:12px;padding:4px 10px;}
+.btn-danger:hover{background:#fdecec;}
+.btn-sm{font-size:12px;padding:5px 12px;}
+
+/* ===== TABLE ===== */
+.table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;padding:8px 10px;border-bottom:2px solid #f0f0e8;font-size:11px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;}
+td{padding:8px 10px;border-bottom:1px solid #f5f5f0;color:#333;vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:#fafaf8;}
+.total-row td{font-weight:600;background:#f5fbf8;color:#0F6E56;}
+.empty{text-align:center;padding:2.5rem;color:#aaa;font-size:13px;}
+
+/* ===== BADGES ===== */
+.badge{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;}
+.badge-cow{background:#E1F5EE;color:#0F6E56;}
+.badge-bull{background:#E6F1FB;color:#185FA5;}
+.badge-heifer{background:#FBEAF0;color:#993556;}
+.badge-calf{background:#FAEEDA;color:#854F0B;}
+.badge-active{background:#EAF3DE;color:#3B6D11;}
+.badge-inactive{background:#F1EFE8;color:#888;}
+.badge-dry{background:#E6F1FB;color:#185FA5;}
+.badge-alert{background:#FAECE7;color:#993C1D;}
+.badge-soon{background:#FAEEDA;color:#854F0B;}
+.badge-auto{background:#EEEDFE;color:#534AB7;font-size:10px;padding:1px 6px;}
+.badge-donation{background:#FBEAF0;color:#993556;}
+.badge-sold{background:#EAF3DE;color:#3B6D11;}
+.badge-died{background:#FCEBEB;color:#A32D2D;}
+.badge-transfer{background:#E6F1FB;color:#185FA5;}
+
+/* ===== METRICS ===== */
+.metric-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:1rem;overflow-x:auto;}
+.metric-grid-5{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:1rem;overflow-x:auto;}
+@media(max-width:700px){
+  .metric-grid,.metric-grid-5{grid-template-columns:repeat(5,minmax(100px,1fr));gap:6px;}
+  .form-grid{grid-template-columns:1fr;}
+  .ov-grid{grid-template-columns:1fr!important;}
+}
+@media(max-width:400px){
+  .metric-grid,.metric-grid-5{grid-template-columns:repeat(5,minmax(80px,1fr));gap:4px;}
+}
+.metric{border-radius:10px;padding:0.75rem 0.5rem;text-align:center;border:1px solid transparent;cursor:pointer;transition:all 0.15s;min-width:0;}
+.metric:hover{transform:translateY(-1px);box-shadow:0 4px 12px rgba(0,0,0,0.08);}
+.mv-cow{font-size:26px;font-weight:700;color:#0F6E56;}
+.mv-bull{font-size:26px;font-weight:700;color:#185FA5;}
+.mv-calf{font-size:26px;font-weight:700;color:#854F0B;}
+.mv-heifer{font-size:26px;font-weight:700;color:#993556;}
+.mv-total{font-size:30px;font-weight:700;color:#3C3489;}
+.mv-plain{font-size:22px;font-weight:700;color:#333;}
+.ml{font-size:11px;font-weight:600;margin-top:2px;}
+.ml-cow{color:#0F6E56;}.ml-bull{color:#185FA5;}.ml-calf{color:#854F0B;}.ml-heifer{color:#993556;}.ml-total{color:#3C3489;}.ml-plain{color:#666;}
+.ms{font-size:10px;margin-top:2px;}
+.ms-cow{color:#1D9E75;}.ms-bull{color:#378ADD;}.ms-calf{color:#BA7517;}.ms-heifer{color:#D4537E;}.ms-total{color:#534AB7;}.ms-plain{color:#aaa;}
+.metric-arrow{font-size:9px;color:#aaa;margin-top:3px;}
+.metric-cow{background:#E1F5EE;border-color:#9FE1CB;}
+.metric-bull{background:#E6F1FB;border-color:#B5D4F4;}
+.metric-calf{background:#FAEEDA;border-color:#FAC775;}
+.metric-heifer{background:#FBEAF0;border-color:#F4C0D1;}
+.metric-total{background:#EEEDFE;border:2px solid #AFA9EC;}
+.metric-plain{background:#f9f9f6;border-color:#e8e8e0;}
+.metric-plain:hover{background:#fff;}
+
+/* ===== BANNERS ===== */
+.alert-banner{background:#FEF9EC;border:1px solid #F9C74F;border-radius:10px;padding:0.75rem 1rem;margin-bottom:1rem;font-size:13px;color:#8B6914;cursor:pointer;}
+.alert-banner:hover{background:#fef5d9;}
+.alert-banner strong{font-weight:600;}
+.info-banner{background:#EEF4FF;border:1px solid #B5D4F4;border-radius:8px;padding:0.6rem 1rem;margin-bottom:0.75rem;font-size:12px;color:#185FA5;}
+
+/* ===== MODALS ===== */
+.modal-bg{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.45);z-index:200;align-items:center;justify-content:center;padding:1rem;}
+.modal-bg.open{display:flex;}
+.modal{background:#fff;border-radius:16px;border:1px solid #e0e0d8;padding:1.5rem;width:100%;max-width:580px;max-height:90vh;overflow-y:auto;box-shadow:0 8px 40px rgba(0,0,0,0.15);}
+.modal h3{font-size:16px;font-weight:600;margin-bottom:1rem;color:#1a1a1a;}
+.modal-footer{display:flex;gap:8px;justify-content:flex-end;margin-top:1rem;border-top:1px solid #f0f0e8;padding-top:1rem;}
+.cond{display:none;margin-top:10px;padding:12px;border-radius:8px;border:1px solid #e8e8e0;background:#fafaf8;}
+.cond-lbl{font-size:12px;font-weight:600;color:#666;margin-bottom:8px;}
+.don-block{display:none;margin-top:10px;padding:12px;border:1px solid #B5D4F4;border-radius:8px;background:#EEF4FF;}
+.don-lbl{font-size:12px;font-weight:600;color:#185FA5;margin-bottom:8px;}
+.filter-row{display:flex;gap:8px;margin-bottom:0.75rem;flex-wrap:wrap;align-items:center;}
+.filter-row select,.filter-row input{font-size:13px;padding:6px 10px;width:auto;}
+
+/* ===== OVERVIEW GRID ===== */
+.ov-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1rem;}
+.ov-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;}
+.ov-head h3{font-size:14px;font-weight:600;}
+.go-arr{font-size:11px;color:#1D9E75;font-weight:500;}
+
+/* ===== DETAIL VIEW ===== */
+.ds{margin-bottom:1.25rem;}
+.ds h4{font-size:12px;font-weight:600;color:#888;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:0.5rem;padding-bottom:6px;border-bottom:1px solid #f0f0e8;}
+.dg{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px;}
+.di{font-size:13px;}
+.di span:first-child{color:#888;font-size:11px;display:block;margin-bottom:1px;}
+.lb{background:none;border:none;color:#1D9E75;font-size:13px;cursor:pointer;text-decoration:underline;padding:0;font-weight:500;}
+.lb:hover{color:#0F6E56;}
+.detail-top{display:flex;gap:1.25rem;align-items:flex-start;margin-bottom:1.25rem;}
+.detail-top-info{flex:1;}
+.detail-photo{width:150px;height:150px;border-radius:12px;object-fit:cover;border:2px solid #e8e8e0;flex-shrink:0;}
+.detail-photo-placeholder{width:150px;height:150px;border-radius:12px;background:#f5f5f0;border:2px solid #e8e8e0;display:flex;align-items:center;justify-content:center;font-size:48px;flex-shrink:0;}
+
+/* ===== PHOTO ===== */
+.animal-thumb{width:38px;height:38px;border-radius:50%;object-fit:cover;border:2px solid #e8e8e0;}
+.animal-thumb-ph{width:38px;height:38px;border-radius:50%;background:#f0faf5;border:2px solid #e8e8e0;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;}
+.photo-upload-area{border:2px dashed #d0d0c8;border-radius:10px;padding:1.5rem;text-align:center;cursor:pointer;transition:all 0.15s;margin-top:4px;}
+.photo-upload-area:hover{border-color:#1D9E75;background:#f0faf5;}
+.photo-upload-area input[type=file]{display:none;}
+.photo-preview{width:80px;height:80px;border-radius:10px;object-fit:cover;border:1px solid #e0e0d8;margin:0 auto 8px;display:block;}
+.photo-upload-label{font-size:12px;color:#888;}
+.section-divider{margin-top:14px;padding-top:14px;border-top:1px solid #f0f0e8;}
+.section-divider-label{font-size:12px;font-weight:600;color:#666;margin-bottom:8px;}
+</style>
+</head>
+<body>
+<script>
+window.onerror=function(msg,src,line,col,err){
+  var d=document.createElement('div');
+  d.style.cssText='position:fixed;bottom:0;left:0;right:0;background:#c0392b;color:#fff;padding:10px 14px;font-size:12px;z-index:9999;word-break:break-all;';
+  d.textContent='Error: '+msg+' | Line: '+line;
+  document.body.appendChild(d);
+};
+</script>
+
+<!-- ===== LOGIN PAGE ===== -->
+<div id="login-page" class="login-page">
+  <div class="login-card">
+    <!-- Farm name — prominent and separate -->
+    <div style="font-size:22px;font-weight:800;color:#0F6E56;letter-spacing:3px;text-transform:uppercase;margin-bottom:2px;">GiRDHAAM</div>
+    <div style="font-size:11px;color:#9abfb2;letter-spacing:1px;font-weight:500;margin-bottom:14px;">Gau Seva &nbsp;·&nbsp; Gau Samridhi</div>
+
+    <!-- Divider -->
+    <div style="width:40px;height:2px;background:linear-gradient(90deg,#c8ddd6,#1D9E75,#c8ddd6);border-radius:2px;margin:0 auto 14px;"></div>
+
+    <!-- App logo + name + tagline grouped -->
+    <div class="login-logo" id="login-logo-wrap" style="cursor:default;position:relative;">
+      <img id="login-logo-img" src="" alt="" style="display:none;width:80px;height:80px;border-radius:50%;object-fit:cover;">
+      <span id="login-logo-emoji">🐄</span>
+    </div>
+    <div class="login-farm-name" style="margin-top:10px;">GauDhan</div>
+    <div class="login-tagline">Gauvansh Management System</div>
+    <div class="login-divider"></div>
+    <div class="login-subtitle">Login</div>
+    <div class="login-form">
+      <div class="fg">
+        <label>Username</label>
+        <input id="login-username" type="text" placeholder="Enter username" autocomplete="username" autocapitalize="none">
+      </div>
+      <div class="fg">
+        <label>Password</label>
+        <input id="login-password" type="password" placeholder="Enter password" autocomplete="current-password">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <input type="checkbox" id="login-remember" style="width:auto;cursor:pointer;" onchange="handleRememberMe()">
+        <label for="login-remember" style="font-size:12px;color:#666;cursor:pointer;margin:0;">Remember me</label>
+      </div>
+      <div id="login-error" class="login-error">Incorrect username or password.</div>
+      <button class="btn-login" onclick="doLogin()">Enter GauDhan &rarr;</button>
+    </div>
+    <div class="login-footer">GauDhan &nbsp;&middot;&nbsp; Gauvansh Management System</div>
+  </div>
+</div>
+
+<!-- ===== APP ===== -->
+<div id="app-wrap" class="app-wrap">
+  <div class="topbar">
+    <div class="topbar-brand">
+      <div class="topbar-logo" id="topbar-logo-wrap"><img id="topbar-logo-img" src="" alt="" style="display:none;width:38px;height:38px;border-radius:50%;object-fit:cover;"><span id="topbar-logo-emoji">🐄</span></div>
+      <div>
+        <div class="topbar-farm">GiRDHAAM</div>
+        <div class="topbar-app">GauDhan &nbsp;·&nbsp; Gauvansh Management System</div>
+      </div>
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="showTab('dashboard')">Dashboard</div>
+      <div class="tab" onclick="showTab('animals')">GauDhan</div>
+      <div class="tab" onclick="showTab('lactation')">Lactation</div>
+      <div class="tab" onclick="showTab('pregnancy')">Pregnancy</div>
+      <div class="tab" onclick="showTab('health')">Health</div>
+      <div class="tab" onclick="showTab('milk')">Milk</div>
+      <div class="tab" onclick="showTab('departures')">Departures</div>
+      <div class="tab" onclick="showTab('alerts')">🔔 Alerts <span id="alert-badge" style="display:none;background:#e74c3c;color:#fff;border-radius:10px;padding:1px 6px;font-size:10px;margin-left:3px;"></span></div>
+      <div class="tab" id="log-tab" onclick="showTab('log')">Log</div>
+    </div>
+    <div class="topbar-right">
+      <input id="global-search" type="text" placeholder="🔍 Search..." oninput="globalSearch()" style="padding:5px 10px;font-size:12px;border:1px solid rgba(255,255,255,0.3);border-radius:6px;background:rgba(255,255,255,0.15);color:#fff;width:130px;outline:none;" onfocus="this.style.background='rgba(255,255,255,0.25)'" onblur="this.style.background='rgba(255,255,255,0.15)'">
+      <span id="topbar-date" style="font-size:11px;color:rgba(255,255,255,0.7);white-space:nowrap;display:none;"></span>
+      <span id="sync-status" style="font-size:11px;color:rgba(255,255,255,0.6);white-space:nowrap;cursor:help;" title="Cloud sync status">☁</span>
+      <div class="user-pill">
+        <span id="tb-name"></span>
+        <span class="role-badge" id="tb-role"></span>
+      </div>
+      <button class="btn-logout" onclick="doLogout()">Log out</button>
+      <button class="btn-logout" onclick="refreshFromCloud()" title="Clear local cache and reload fresh data from cloud" style="background:rgba(255,255,255,0.15);">↺ Refresh</button>
+    </div>
+  </div>
+
+  <div class="main">
+
+    <!-- OVERVIEW -->
+    <div id="dashboard" class="section active">
+      <div id="calving-alerts"></div>
+
+      <!-- Farm logo upload — visible to admin only -->
+      <!-- Admin: Logo upload -->
+      <div id="logo-upload-card" style="display:none;background:#f0faf5;border:1px solid #9FE1CB;border-radius:10px;padding:12px 16px;margin-bottom:8px;">
+        <div style="font-size:13px;font-weight:700;color:#0F6E56;margin-bottom:10px;">⚙ Admin Settings</div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div id="dash-logo-preview" style="width:42px;height:42px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex-shrink:0;">🐄</div>
+          <div style="flex:1;font-size:12px;color:#5a8a78;">Farm logo — shown on login page and topbar</div>
+          <label style="cursor:pointer;display:inline-block;z-index:1;position:relative;">
+            <input type="file" accept="image/*" style="display:none;" onchange="uploadFarmLogo(this);updateDashLogoPreview(this);">
+            <span class="btn btn-sm" style="background:#1D9E75;color:#fff;border-color:#1D9E75;display:inline-block;">📷 Upload Logo</span>
+          </label>
+        </div>
+        <div style="border-top:1px dashed #c8ddd6;padding-top:10px;margin-top:10px;font-size:12px;color:#666;">
+          If you cleared Supabase data but old data still shows — tap below to clear the local device cache and reload fresh from Supabase.
+          <br><br>
+          <a href="javascript:void(0)" onclick="['gd2-animals','gd2-preg','gd2-lact','gd2-log','gd2-health','gd2-milk','gd2-has-real-data'].forEach(function(k){localStorage.removeItem(k)});location.reload();" style="color:#c0392b;font-weight:600;text-decoration:underline;">↺ Clear local cache &amp; reload</a>
+        </div>
+      </div>
+
+      <div class="metric-grid" id="metrics">
+        <div class="metric metric-cow" onclick="showTab('animals','Cow')"><div class="mv-cow" id="mc-cows">—</div><div class="ml ml-cow">Cows</div><div class="ms ms-cow" id="ms-cows">&nbsp;</div><div class="metric-arrow">GauDhan →</div></div>
+        <div class="metric metric-heifer" onclick="showTab('animals','Heifer')"><div class="mv-heifer" id="mc-heifers">—</div><div class="ml ml-heifer">Heifers</div><div class="ms ms-heifer" id="ms-heifers">&nbsp;</div><div class="metric-arrow">GauDhan →</div></div>
+        <div class="metric metric-bull" onclick="showTab('animals','Bull')"><div class="mv-bull" id="mc-bulls">—</div><div class="ml ml-bull">Bulls</div><div class="ms ms-bull" id="ms-bulls">&nbsp;</div><div class="metric-arrow">GauDhan →</div></div>
+        <div class="metric metric-calf" onclick="showTab('animals','Calf')"><div class="mv-calf" id="mc-calves">—</div><div class="ml ml-calf">Calves</div><div class="ms ms-calf" id="ms-calves">&nbsp;</div><div class="metric-arrow">GauDhan →</div></div>
+        <div class="metric metric-total" onclick="showTab('animals','')"><div class="mv-total" id="mc-total">—</div><div class="ml ml-total">Total on farm</div><div class="ms ms-total" id="ms-total">&nbsp;</div><div class="metric-arrow">All GauDhan →</div></div>
+      </div>
+      <div class="ov-grid">
+        <div class="card card-link" onclick="showTab('milk')"><div class="ov-head"><h3>Today's milk</h3><span class="go-arr">Milk →</span></div><div id="ov-milk"></div></div>
+        <div class="card card-link" onclick="showTab('pregnancy')"><div class="ov-head"><h3>Pregnancy status</h3><span class="go-arr">Pregnancy →</span></div><div id="ov-preg"></div></div>
+      </div>
+      <div class="ov-grid">
+        <div class="card card-link" onclick="showTab('health')"><div class="ov-head"><h3>Recent health records</h3><span class="go-arr">Health →</span></div><div id="ov-health"></div></div>
+        <div class="card card-link" onclick="showTab('log')"><div class="ov-head"><h3>Recent activity</h3><span class="go-arr">Log →</span></div><div id="ov-log"></div></div>
+      </div>
+      <div class="ov-grid">
+        <div class="card card-link" onclick="showTab('lactation')"><div class="ov-head"><h3>Active lactations</h3><span class="go-arr">Lactation →</span></div><div id="ov-lact"></div></div>
+        <div class="card card-link" onclick="showTab('departures')"><div class="ov-head"><h3>Recent departures</h3><span class="go-arr">Departures →</span></div><div id="ov-dep"></div></div>
+      </div>
+    </div>
+
+    <!-- ANIMALS -->
+    <div id="animals" class="section">
+      <div class="card">
+        <div class="section-head">
+          <h3>GauDhan registry <span class="section-head-note">GauDhan currently on farm</span></h3>
+          <div class="section-head-actions">
+            <button class="btn btn-sm" data-role-export onclick="exportXL('animals')">⬇ Export Excel</button>
+            <button class="btn btn-primary" data-role-add onclick="openModal('animal-modal');setTagPrefix()">+ Add GauDhan</button>
+          </div>
+        </div>
+        <div class="filter-row">
+          <select id="filter-type" onchange="renderAnimals()" style="width:auto;"><option value="">All types</option><option>Cow</option><option>Bull</option><option>Heifer</option><option>Calf</option></select>
+          <select id="filter-status" onchange="renderAnimals()" style="width:auto;"><option value="">Active &amp; Dry</option><option>Active</option><option>Dry</option></select>
+          <select id="filter-reason" onchange="renderAnimals()" style="width:auto;"><option value="">All — Added via</option><option>Born on farm</option><option>Purchased</option><option>Donation</option><option>Transfer in</option><option>Other</option></select>
+          <input type="text" placeholder="Search tag or name..." id="filter-search" oninput="renderAnimals()" style="flex:1;min-width:120px;">
+        </div>
+        <div id="animals-count-bar" style="display:none;margin:10px 0 6px;padding:8px 14px;background:linear-gradient(90deg,#E1F5EE,#f0faf5);border-radius:8px;border-left:4px solid #1D9E75;font-size:14px;font-weight:700;color:#0F6E56;"></div>
+        <div class="table-wrap"><table><thead><tr><th>Photo</th><th>Tag Sl. No.</th><th>Tag</th><th>Name</th><th>Type</th><th>Breed</th><th>DOB</th><th>Father</th><th>Mother</th><th>Lact #</th><th>Added via</th><th>Status</th><th></th></tr></thead><tbody id="animal-table"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- MILK -->
+    <div id="milk" class="section">
+      <div class="back-btn" onclick="showTab('dashboard')">← Dashboard</div>
+      <div class="metric-grid-5" id="milk-metrics"></div>
+
+      <!-- RECORD MILK -->
+      <div class="card">
+        <div class="section-head"><h3>Record milk</h3></div>
+        <div class="info-banner">💡 Save <strong>morning</strong> now and come back later to add <strong>evening</strong> — both merge into the same daily record automatically.</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr auto;gap:10px 12px;align-items:end;">
+          <div class="fg"><label>Date *</label><input id="m-date" type="date"></div>
+          <div class="fg"><label>Cow *</label><select id="m-cow"><option value="">— select —</option></select></div>
+          <div class="fg"><label>Session</label>
+            <select id="m-session" onchange="updateMilkSessionUI()">
+              <option value="both">Morning + Evening</option>
+              <option value="morning">Morning only</option>
+              <option value="evening">Evening only</option>
+            </select>
+          </div>
+          <div class="fg" id="morn-group"><label>Morning (L)</label><input id="m-morn" type="number" min="0" step="0.1" placeholder="0.0" oninput="calcMilkTotal()"></div>
+          <div class="fg" id="eve-group"><label>Evening (L)</label><input id="m-eve" type="number" min="0" step="0.1" placeholder="0.0" oninput="calcMilkTotal()"></div>
+          <div class="fg"><label>Total</label><div id="m-total-display" style="font-size:22px;font-weight:800;padding:6px 0;color:#0F6E56;">—</div></div>
+        </div>
+        <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+          <button class="btn btn-primary" onclick="addMilk()">Save record</button>
+          <span id="m-save-msg" style="font-size:12px;color:#1D9E75;font-weight:700;"></span>
+        </div>
+      </div>
+
+      <!-- BULK MILK ENTRY -->
+      <div class="card">
+        <div class="section-head">
+          <h3>Bulk milk entry — all cows</h3>
+          <div class="section-head-actions">
+            <label style="font-size:12px;color:#666;">Date:</label>
+            <input type="date" id="bulk-date" style="width:auto;font-size:13px;padding:5px 8px;" onchange="renderBulkMilk()">
+            <select id="bulk-session" style="width:auto;font-size:13px;" onchange="renderBulkMilk()">
+              <option value="both">Morning + Evening</option>
+              <option value="morning">Morning only</option>
+              <option value="evening">Evening only</option>
+            </select>
+          </div>
+        </div>
+        <div class="info-banner">Enter milk for all cows at once. Leave blank to skip a cow.</div>
+        <div id="bulk-milk-table"></div>
+        <div style="margin-top:12px;display:flex;gap:8px;">
+          <button class="btn btn-primary" onclick="saveBulkMilk()">Save all</button>
+          <span id="bulk-save-msg" style="font-size:12px;color:#1D9E75;font-weight:600;"></span>
+        </div>
+      </div>
+
+      <!-- IMPORT FROM EXCEL -->
+      <div class="card">
+        <div class="section-head"><h3>Import milk data from Excel</h3></div>
+        <div class="info-banner">Your Excel file must have these columns: <strong>Date &nbsp;|&nbsp; Cow Tag &nbsp;|&nbsp; Morning (L) &nbsp;|&nbsp; Evening (L)</strong>. Date format: YYYY-MM-DD or DD/MM/YYYY. Download the template below to get started.</div>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:10px;">
+          <input type="file" id="milk-excel-import" accept=".xlsx,.xls,.csv" style="width:auto;flex:1;min-width:0;" onchange="importMilkExcel(this)">
+          <button class="btn btn-sm btn-success" onclick="downloadMilkImportTemplate()">⬇ Download template (.xlsx)</button>
+        </div>
+        <div id="milk-import-msg" style="font-size:13px;margin-top:10px;font-weight:500;"></div>
+      </div>
+
+      <!-- DAILY COW-WISE REPORT -->
+      <div class="card">
+        <div class="section-head">
+          <h3>Daily cow-wise milk report</h3>
+          <div class="section-head-actions">
+            <label style="font-size:12px;color:#5a8a78;font-weight:600;">Date:</label>
+            <input type="date" id="daily-report-date" onchange="renderDailyReport()" style="width:auto;font-size:13px;padding:5px 8px;">
+            <button class="btn btn-sm btn-success" onclick="printDailyReport()">🖨 Print</button>
+          </div>
+        </div>
+        <div id="daily-report-body"></div>
+      </div>
+
+      <!-- DAILY RECORDS TABLE -->
+      <div class="card">
+        <div class="section-head"><h3>All milk records</h3>
+          <div class="section-head-actions">
+            <label style="font-size:12px;color:#5a8a78;font-weight:600;">Cow:</label>
+            <select id="milk-filter-cow" onchange="renderMilk()" style="width:auto;font-size:13px;"><option value="">All cows</option></select>
+            <label style="font-size:12px;color:#5a8a78;font-weight:600;">Month:</label>
+            <input type="month" id="milk-filter-month" onchange="renderMilk()" style="width:auto;font-size:13px;padding:5px 8px;">
+            <button class="btn btn-sm btn-success" data-role-export onclick="exportMilkExcel()">⬇ Export Excel</button>
+          </div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Cow tag</th><th>Name</th><th>Morning (L)</th><th>Evening (L)</th><th>Daily total (L)</th><th>Status</th><th></th></tr></thead><tbody id="milk-table"></tbody></table></div>
+      </div>
+
+      <!-- MONTHLY SUMMARY -->
+      <div class="card">
+        <div class="section-head"><h3>Monthly summary per cow</h3>
+          <div class="section-head-actions">
+            <label style="font-size:12px;color:#5a8a78;font-weight:600;">Month:</label>
+            <input type="month" id="milk-summary-month" onchange="renderMilkSummary()" style="width:auto;font-size:13px;padding:5px 8px;">
+          </div>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Cow tag</th><th>Name</th><th>Days</th><th>Total yield (L)</th><th>Avg / day (L)</th><th>Best day (L)</th></tr></thead><tbody id="milk-summary-table"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- PREGNANCY -->
+    <div id="pregnancy" class="section">
+
+      <!-- Active Pregnancies -->
+      <div class="card">
+        <div class="section-head">
+          <h3>Active Pregnancies</h3>
+          <div class="section-head-actions">
+            <button class="btn btn-primary" data-role-add onclick="openPregModal()">+ Add Pregnancy</button>
+          </div>
+        </div>
+        <div class="info-banner">Records of insemination and ongoing pregnancies. When a cow delivers, click <strong>Record Delivery</strong> on that row.</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Cow</th><th>Insem. date</th><th>Bull / Sire</th><th>Method</th><th>Expected delivery</th><th>Days left</th><th>Dry-off date</th><th>Status</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="preg-active-table"></tbody>
+        </table></div>
+      </div>
+
+      <!-- Delivery Records -->
+      <div class="card" style="margin-top:1rem;">
+        <div class="section-head">
+          <h3>Delivery Records</h3>
+          <div class="section-head-actions">
+            <button class="btn btn-sm" data-role-export onclick="exportXL('pregnancy')">⬇ Export Excel</button>
+          </div>
+        </div>
+        <div class="info-banner">Completed deliveries. A lactation record is created automatically on delivery. <span class="badge badge-auto">auto</span> = system-generated.</div>
+        <div class="table-wrap"><table>
+          <thead><tr><th>Cow</th><th>Insem. date</th><th>Delivery date</th><th>Outcome</th><th>Calf / Heifer tag</th><th>New lactation #</th><th>Notes</th><th></th></tr></thead>
+          <tbody id="preg-delivered-table"></tbody>
+        </table></div>
+      </div>
+
+    </div>
+
+    <!-- LACTATION -->
+    <div id="lactation" class="section">
+      <div class="card">
+        <div class="section-head"><h3>Lactation records</h3>
+          <div class="section-head-actions">
+            <button class="btn btn-sm" data-role-export onclick="exportXL('lactation')">⬇ Export Excel</button>
+            <button class="btn btn-primary" data-role-add onclick="openModal('lact-modal')">+ Add record</button>
+          </div>
+        </div>
+        <div class="info-banner">Each row is one complete lactation cycle. <strong>Active</strong> = currently milking. Click <strong>Record Dry-off</strong> to mark when milking stops. Dry period = Dry-off → Next calving. <span class="badge badge-auto">auto</span> = system-generated from delivery.</div>
+        <div class="table-wrap"><table>
+          <thead><tr>
+            <th>Cow</th><th>Lact #</th><th>Source</th>
+            <th>Calving date</th><th>Active days</th>
+            <th>Dry-off date</th><th>Dry period (days)</th>
+            <th>Next calving</th>
+            <th>Total yield (L)</th><th>Peak (L/day)</th>
+            <th>Notes</th><th></th>
+          </tr></thead>
+          <tbody id="lact-table"></tbody>
+        </table></div>
+      </div>
+    </div>
+
+    <!-- HEALTH -->
+    <div id="health" class="section">
+      <div class="card">
+        <div class="section-head"><h3>Health &amp; treatment records</h3>
+          <div class="section-head-actions"><button class="btn btn-sm" data-role-export onclick="exportXL('health')">⬇ Export Excel</button><button class="btn btn-primary" data-role-add onclick="openModal('health-modal')">+ Add record</button></div>
+        </div>
+        <div class="filter-row">
+          <input type="text" placeholder="Filter by tag..." id="health-filter" oninput="renderHealth()" style="min-width:120px;flex:1;">
+          <select id="health-type-filter" onchange="renderHealth()" style="width:auto;"><option value="">All types</option><option>Vaccination</option><option>Treatment</option><option>Deworming</option><option>Injury</option><option>Examination</option><option>Other</option></select>
+        </div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Tag</th><th>Type</th><th>Condition</th><th>Treatment</th><th>Dosage</th><th>Vet</th><th>Next due</th><th>Notes</th><th></th></tr></thead><tbody id="health-table"></tbody></table></div>
+      </div>
+    </div>
+
+    <!-- LOG -->
+    <!-- ALERTS SECTION -->
+    <div id="alerts" class="section">
+      <div class="card">
+        <div class="section-head">
+          <h3>🔔 Alerts &amp; Reminders</h3>
+          <div class="section-head-actions">
+            <span style="font-size:12px;color:#888;">Auto-generated from your farm records</span>
+          </div>
+        </div>
+        <div id="alerts-body"></div>
+      </div>
+    </div>
+
+    <div id="log" class="section">
+      <div class="card">
+        <div class="section-head"><h3>GauDhan addition &amp; deletion log</h3><button class="btn btn-sm" data-role-export onclick="exportXL('log')">⬇ Export Excel</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Tag</th><th>Name</th><th>Type</th><th>Action</th><th>Reason</th><th>Logged by</th><th>Donor / Purchaser</th><th>Notes</th></tr></thead><tbody id="log-table"></tbody></table></div>
+      </div>
+
+    </div>
+
+    <!-- DEPARTURES -->
+    <div id="departures" class="section">
+      <div class="card">
+        <div class="section-head"><h3>Departures from farm</h3><button class="btn btn-sm" data-role-export onclick="exportXL('departures')">⬇ Export Excel</button></div>
+        <div class="table-wrap"><table><thead><tr><th>Photo</th><th>Date</th><th>Tag</th><th>Name</th><th>Type</th><th>Reason</th><th>Purchaser / Recipient</th><th>Price</th><th>Cause of death</th><th>Notes</th></tr></thead><tbody id="dep-table"></tbody></table></div>
+      </div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /app-wrap -->
+
+<!-- ===== MODALS ===== -->
+<div class="modal-bg" id="animal-modal"><div class="modal">
+  <h3>Add GauDhan</h3>
+  <div class="form-grid">
+    <div class="fg"><label>Tag *</label><input id="a-tag" placeholder="C-011 or B-001" onblur="padTagNumber()"></div>    <div class="fg"><label>Tag Sl. No.</label><input id="a-tagslno" placeholder="e.g. 001"></div>
+    <div class="fg"><label>Name</label><input id="a-name"></div>
+    <div class="fg"><label>Type *</label><select id="a-type" onchange="toggleCowFields();setTagPrefix()"><option>Cow</option><option>Bull</option><option>Heifer</option><option>Calf</option></select></div>
+    <div class="fg"><label>Breed</label><input id="a-breed" value="Gir" placeholder="e.g. Gir"></div>
+    <div class="fg"><label>Date of birth</label><input id="a-dob" type="date"></div>
+    <div class="fg"><label>Sex</label><select id="a-sex"><option>Female</option><option>Male</option></select></div>
+    <div class="fg"><label>Father tag</label><input id="a-sire"></div>
+    <div class="fg"><label>Mother tag</label><input id="a-dam"></div>
+    <div class="fg"><label>Addition reason</label><select id="a-reason" onchange="toggleDonationFields()"><option>Born on farm</option><option>Purchased</option><option>Transfer in</option><option>Donation</option><option>Other</option></select></div>
+    <div class="fg"><label>Addition date</label><input id="a-adddate" type="date"></div>
+  </div>
+  <div class="don-block" id="donation-fields"><div class="don-lbl">Donation details</div>
+    <div class="form-grid">
+      <div class="fg"><label>Donor name *</label><input id="a-donor"></div>
+      <div class="fg"><label>Date of donation *</label><input id="a-dondate" type="date"></div>
+    </div>
+  </div>
+  <div class="section-divider" id="cow-fields">
+    <div class="section-divider-label">Lactation details (if already lactating)</div>
+    <div class="form-grid">
+      <div class="fg"><label>Current lactation #</label><input id="a-lactnum" type="number" min="1"><div class="form-hint">Leave blank if not yet lactating</div></div>
+      <div class="fg"><label>Lactation start date</label><input id="a-lactstart" type="date"></div>
+      <div class="fg"><label>Yield so far (L)</label><input id="a-lacttotal" type="number" min="0"></div>
+      <div class="fg"><label>Peak yield (L/day)</label><input id="a-lactpeak" type="number" min="0"></div>
+    </div>
+  </div>
+  <div class="section-divider">
+    <div class="section-divider-label">GauDhan photo (optional)</div>
+    <div class="photo-upload-area" onclick="document.getElementById('a-photo-input').click()">
+      <input type="file" id="a-photo-input" accept="image/*" onchange="previewPhoto(this)">
+      <img id="a-photo-preview" class="photo-preview" style="display:none;">
+      <div id="a-photo-placeholder">
+        <div style="font-size:32px;margin-bottom:6px;">📷</div>
+        <div class="photo-upload-label">Tap to upload photo<br><span style="font-size:11px;color:#bbb;">JPG, PNG — max 2MB</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="fg" style="margin-top:12px;"><label>Notes</label><textarea id="a-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('animal-modal')">Cancel</button><button class="btn btn-primary" onclick="addAnimal()">Save animal</button></div>
+</div></div>
+
+<div class="modal-bg" id="edit-animal-modal"><div class="modal">
+  <h3 id="edit-animal-title">Edit GauDhan</h3>
+  <div class="form-grid">
+    <div class="fg"><label>Tag <span id="ea-tag-hint" style="font-size:10px;color:#aaa;font-weight:400;">(Admin only)</span></label><input id="ea-tag" disabled style="background:#f5f5f0;color:#888;"></div>
+    <div class="fg"><label>Tag Sl. No.</label><input id="ea-tagslno" placeholder="e.g. 001"></div>
+    <div class="fg"><label>Name</label><input id="ea-name"></div>
+    <div class="fg"><label>Type</label><select id="ea-type"><option>Cow</option><option>Bull</option><option>Heifer</option><option>Calf</option></select></div>
+    <div class="fg"><label>Breed</label><input id="ea-breed"></div>
+    <div class="fg"><label>Status</label><select id="ea-status"><option value="Active">Active</option><option value="Dry">Dry</option></select></div>
+    <div class="fg"><label>Date of birth</label><input id="ea-dob" type="date"></div>
+    <div class="fg"><label>Sex</label><select id="ea-sex"><option>Female</option><option>Male</option></select></div>
+    <div class="fg"><label>Father tag</label><input id="ea-sire"></div>
+    <div class="fg"><label>Mother tag</label><input id="ea-dam"></div>
+    <div class="fg"><label>Addition reason</label><select id="ea-reason" onchange="toggleEditDonationFields()"><option>Born on farm</option><option>Purchased</option><option>Transfer in</option><option>Donation</option><option>Other</option></select></div>
+    <div class="fg"><label>Addition date</label><input id="ea-adddate" type="date"></div>
+  </div>
+  <div class="don-block" id="edit-donation-fields"><div class="don-lbl">Donation details</div>
+    <div class="form-grid">
+      <div class="fg"><label>Donor name</label><input id="ea-donor"></div>
+      <div class="fg"><label>Date of donation</label><input id="ea-dondate" type="date"></div>
+    </div>
+  </div>
+  <div class="section-divider">
+    <div class="section-divider-label">GauDhan photo</div>
+    <div id="ea-current-photo" style="margin-bottom:8px;"></div>
+    <div class="photo-upload-area" onclick="document.getElementById('ea-photo-input').click()">
+      <input type="file" id="ea-photo-input" accept="image/*" onchange="previewEditPhoto(this)">
+      <img id="ea-photo-preview" class="photo-preview" style="display:none;">
+      <div id="ea-photo-placeholder"><div style="font-size:28px;margin-bottom:4px;">📷</div><div class="photo-upload-label">Upload new photo to replace<br><span style="font-size:11px;color:#bbb;">JPG, PNG — max 2MB</span></div></div>
+    </div>
+  </div>
+  <div class="fg" style="margin-top:12px;"><label>Notes</label><textarea id="ea-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('edit-animal-modal')">Cancel</button><button class="btn btn-primary" onclick="saveEditAnimal()">Save changes</button></div>
+</div></div>
+
+<div class="modal-bg" id="delete-modal"><div class="modal">
+  <h3 id="del-title">Remove GauDhan</h3>
+  <div class="form-grid">
+    <div class="fg"><label>Departure date *</label><input id="del-date" type="date"></div>
+    <div class="fg"><label>Reason *</label><select id="del-reason" onchange="toggleDelFields()"><option>Sold</option><option>Died - natural</option><option>Died - disease</option><option>Transfer out</option><option>Donated</option><option>Other</option></select></div>
+  </div>
+  <div class="cond" id="del-sold"><div class="cond-lbl">Sale details</div><div class="form-grid"><div class="fg"><label>Purchaser name *</label><input id="del-purchaser"></div><div class="fg"><label>Sale price (₹)</label><input id="del-price" type="number" min="0"></div></div></div>
+  <div class="cond" id="del-death"><div class="cond-lbl">Death details</div><div class="fg"><label>Cause of death</label><input id="del-cause"></div></div>
+  <div class="cond" id="del-transfer"><div class="cond-lbl">Transfer details</div><div class="fg"><label>Destination</label><input id="del-destination"></div></div>
+  <div class="cond" id="del-donated"><div class="cond-lbl">Donation details</div><div class="form-grid"><div class="fg"><label>Donated to *</label><input id="del-donateto"></div><div class="fg"><label>Destination</label><input id="del-donatedest"></div></div></div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="del-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('delete-modal')">Cancel</button><button class="btn btn-danger" onclick="confirmDelete()">Confirm departure</button></div>
+</div></div>
+
+<div class="modal-bg" id="preg-modal"><div class="modal">
+  <h3>Add Pregnancy Record</h3>
+  <div class="info-banner" style="margin-bottom:12px;">Record insemination details. Delivery is recorded separately when the calf is born.</div>
+  <div class="form-grid">
+    <div class="fg"><label>Cow *</label><select id="p-cow"><option value="">— select cow —</option></select></div>
+    <div class="fg"><label>Insemination date *</label><input id="p-insem" type="date"></div>
+    <div class="fg"><label>Bull / Sire tag</label><input id="p-sire" placeholder="e.g. B-001"></div>
+    <div class="fg"><label>Method</label><select id="p-method"><option>AI (Artificial)</option><option>Natural</option></select></div>
+    <div class="fg"><label>Expected delivery date</label><input id="p-calving" type="date"></div>
+    <div class="fg"><label>Status</label><select id="p-status"><option value="Pregnant">Pregnant</option><option value="Aborted">Aborted</option><option value="Open">Open</option></select></div>
+  </div>
+  <div class="section-divider" style="margin-top:12px;">
+    <div class="section-divider-label">Change cow to Dry (optional)</div>
+    <div class="form-grid">
+      <div class="fg"><label>Date milk stopped</label><input id="p-milk-end" type="date"><div class="form-hint">If milk has already stopped — cow status changes to Dry</div></div>
+    </div>
+  </div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="p-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('preg-modal')">Cancel</button><button class="btn btn-primary" onclick="addPreg()">Save pregnancy record</button></div>
+</div></div>
+
+<!-- RECORD DELIVERY MODAL -->
+<div class="modal-bg" id="delivery-modal"><div class="modal">
+  <h3>Record Delivery</h3>
+  <div id="delivery-preg-info" style="background:#f0faf5;border:1px solid #9FE1CB;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#0F6E56;font-weight:500;"></div>
+  <div class="form-grid">
+    <div class="fg"><label>Delivery date *</label><input id="d-date" type="date"><div class="form-hint">Lactation starts from this date</div></div>
+    <div class="fg"><label>Outcome</label><select id="d-outcome"><option value="Bull">Bull (Male)</option><option value="Heifer">Heifer (Female)</option><option value="Stillborn">Stillborn</option><option value="Twins">Twins</option></select></div>
+    <div class="fg"><label>Tag no. of Calf / Heifer</label><input id="d-tag" placeholder="e.g. CF-001 or H-001"></div>
+    <div class="fg"><label>Condition of offspring</label><select id="d-condition"><option value="Healthy">Healthy</option><option value="Weak">Weak — needs care</option><option value="Stillborn">Stillborn</option></select></div>
+  </div>
+  <div class="info-banner" style="margin-top:10px;">Cow status will be set to <strong>Active</strong> and a new lactation record created automatically.</div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="d-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('delivery-modal')">Cancel</button><button class="btn btn-primary" onclick="saveDelivery()">Save delivery record</button></div>
+</div></div>
+
+<div class="modal-bg" id="lact-modal"><div class="modal">
+  <h3>Add lactation record</h3>
+  <div class="info-banner">Use this to manually add or update a lactation cycle.</div>
+  <div class="form-grid">
+    <div class="fg"><label>Cow tag *</label><input id="l-cow"></div>
+    <div class="fg"><label>Lactation number</label><input id="l-num" type="number" min="1"></div>
+    <div class="fg"><label>Calving / Start date</label><input id="l-start" type="date"></div>
+    <div class="fg"><label>Dry-off date</label><input id="l-end" type="date"><div class="form-hint">Date milking stopped — marks cow as Dry</div></div>
+    <div class="fg"><label>Next calving date</label><input id="l-nextcalv" type="date"><div class="form-hint">Links to next lactation cycle</div></div>
+    <div class="fg"><label>Total yield (L)</label><input id="l-total" type="number" min="0"></div>
+    <div class="fg"><label>Peak yield (L/day)</label><input id="l-peak" type="number" min="0"></div>
+  </div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="l-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('lact-modal')">Cancel</button><button class="btn btn-primary" onclick="addLact()">Save record</button></div>
+</div></div>
+
+<!-- DRY-OFF MODAL -->
+<div class="modal-bg" id="dryoff-modal"><div class="modal" style="max-width:420px;">
+  <h3>Record Dry-off</h3>
+  <div id="dryoff-lact-info" style="background:#fff8e0;border:1px solid #e8c840;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#856404;font-weight:500;"></div>
+  <div class="form-grid">
+    <div class="fg"><label>Dry-off date *</label><input id="do-date" type="date"><div class="form-hint">Date milking stopped. Cow status → Dry</div></div>
+    <div class="fg"><label>Reason for dry-off</label><select id="do-reason"><option value="Natural dry-off">Natural dry-off (planned)</option><option value="Pregnancy dry-off">Pregnancy dry-off</option><option value="Low yield">Low yield</option><option value="Health — mastitis">Health — mastitis</option><option value="Other">Other</option></select></div>
+    <div class="fg"><label>Total yield this lactation (L)</label><input id="do-total" type="number" min="0" placeholder="Optional"></div>
+    <div class="fg"><label>Peak yield this lactation (L/day)</label><input id="do-peak" type="number" min="0" placeholder="Optional"></div>
+  </div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="do-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('dryoff-modal')">Cancel</button><button class="btn btn-primary" onclick="saveDryoff()">Save dry-off</button></div>
+</div></div>
+
+<div class="modal-bg" id="health-modal"><div class="modal">
+  <h3>Add health / treatment record</h3>
+  <div class="form-grid">
+    <div class="fg"><label>GauDhan tag *</label><input id="h-tag"></div>
+    <div class="fg"><label>Date *</label><input id="h-date" type="date"></div>
+    <div class="fg"><label>Record type</label><select id="h-type"><option>Vaccination</option><option>Treatment</option><option>Deworming</option><option>Injury</option><option>Examination</option><option>Other</option></select></div>
+    <div class="fg"><label>Diagnosis / Condition</label><input id="h-diag"></div>
+    <div class="fg"><label>Treatment / Drug</label><input id="h-drug"></div>
+    <div class="fg"><label>Dosage</label><input id="h-dose"></div>
+    <div class="fg"><label>Administered by (Vet)</label><input id="h-vet"></div>
+    <div class="fg"><label>Next due date</label><input id="h-next" type="date"></div>
+  </div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="h-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('health-modal')">Cancel</button><button class="btn btn-primary" onclick="addHealth()">Save record</button></div>
+</div></div>
+
+<!-- EDIT PREGNANCY MODAL -->
+<div class="modal-bg" id="edit-preg-modal"><div class="modal">
+  <h3>Edit Pregnancy Record</h3>
+  <div class="form-grid">
+    <div class="fg"><label>Cow</label><input id="ep-cow" disabled style="background:#f5f5f0;"></div>
+    <div class="fg"><label>Insemination date</label><input id="ep-insem" type="date"></div>
+    <div class="fg"><label>Bull / Sire tag</label><input id="ep-sire"></div>
+    <div class="fg"><label>Method</label><select id="ep-method"><option>AI (Artificial)</option><option>Natural</option></select></div>
+    <div class="fg"><label>Expected delivery date</label><input id="ep-calving" type="date"></div>
+    <div class="fg"><label>Status</label><select id="ep-status"><option value="Pregnant">Pregnant</option><option value="Delivered">Delivered</option><option value="Aborted">Aborted</option><option value="Open">Open</option></select></div>
+  </div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="ep-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('edit-preg-modal')">Cancel</button><button class="btn btn-primary" onclick="saveEditPreg()">Save changes</button></div>
+</div></div>
+
+<!-- EDIT LACTATION MODAL -->
+<div class="modal-bg" id="edit-lact-modal"><div class="modal">
+  <h3>Edit Lactation Record</h3>
+  <div class="form-grid">
+    <div class="fg"><label>Cow</label><input id="el-cow" disabled style="background:#f5f5f0;"></div>
+    <div class="fg"><label>Lactation number</label><input id="el-num" type="number" min="1"></div>
+    <div class="fg"><label>Calving / Start date</label><input id="el-start" type="date"></div>
+    <div class="fg"><label>Dry-off date</label><input id="el-end" type="date"></div>
+    <div class="fg"><label>Next calving date</label><input id="el-nextcalv" type="date"></div>
+    <div class="fg"><label>Total yield (L)</label><input id="el-total" type="number" min="0"></div>
+    <div class="fg"><label>Peak yield (L/day)</label><input id="el-peak" type="number" min="0"></div>
+  </div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="el-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('edit-lact-modal')">Cancel</button><button class="btn btn-primary" onclick="saveEditLact()">Save changes</button></div>
+</div></div>
+
+<!-- EDIT HEALTH MODAL -->
+<div class="modal-bg" id="edit-health-modal"><div class="modal">
+  <h3>Edit Health Record</h3>
+  <div class="form-grid">
+    <div class="fg"><label>GauDhan tag</label><input id="eh-tag" disabled style="background:#f5f5f0;"></div>
+    <div class="fg"><label>Date</label><input id="eh-date" type="date"></div>
+    <div class="fg"><label>Record type</label><select id="eh-type"><option>Vaccination</option><option>Treatment</option><option>Deworming</option><option>Injury</option><option>Examination</option><option>Other</option></select></div>
+    <div class="fg"><label>Diagnosis / Condition</label><input id="eh-diag"></div>
+    <div class="fg"><label>Treatment / Drug</label><input id="eh-drug"></div>
+    <div class="fg"><label>Dosage</label><input id="eh-dose"></div>
+    <div class="fg"><label>Administered by (Vet)</label><input id="eh-vet"></div>
+    <div class="fg"><label>Next due date</label><input id="eh-next" type="date"></div>
+  </div>
+  <div class="fg" style="margin-top:10px;"><label>Notes</label><textarea id="eh-notes"></textarea></div>
+  <div class="modal-footer"><button class="btn" onclick="closeModal('edit-health-modal')">Cancel</button><button class="btn btn-primary" onclick="saveEditHealth()">Save changes</button></div>
+</div></div>
+
+<div class="modal-bg" id="edit-milk-modal"><div class="modal" style="max-width:420px;">
+  <h3 id="edit-milk-title">Edit milk record</h3>
+  <div style="background:#f5f5f0;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;">
+    <span id="edit-milk-info" style="color:#555;"></span>
+  </div>
+  <div class="form-grid">
+    <div class="fg"><label>Morning (L)</label><input id="em-morn" type="number" min="0" step="0.1" placeholder="0.0"></div>
+    <div class="fg"><label>Evening (L)</label><input id="em-eve" type="number" min="0" step="0.1" placeholder="0.0"></div>
+  </div>
+  <div style="margin-top:10px;font-size:13px;color:#5a8a78;">Total: <strong id="em-total">—</strong></div>
+  <div class="modal-footer">
+    <button class="btn" onclick="closeModal('edit-milk-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveMilkEdit()">Save changes</button>
+  </div>
+</div></div>
+
+<div class="modal-bg" id="detail-modal"><div class="modal" style="max-width:640px;">
+  <h3 id="detail-title"></h3>
+  <div id="detail-body"></div>
+  <div class="modal-footer">
+    <button class="btn btn-primary" id="detail-edit-btn" onclick="editAnimalFromDetail()">✏ Edit GauDhan</button>
+    <button class="btn" onclick="closeModal('detail-modal')">Close</button>
+  </div>
+</div></div>
+
+<script>
+// GauDhan — Gauvansh Management System | GiRDHAAM Farm
+
+// ── global state ──
+let pendingTag=null, pendingPhotoB64='', editingTag=null, editingPhotoB64=null, editingDetailTag=null;
+let currentUser='', currentRole='';
+
+// ── DATA — hardcoded defaults, always available immediately ──
+let A=[];
+let P=[];
+let L=[];
+let H=[];
+let G=[];
+let M=[];
+
+// ── Load cached data from localStorage (Supabase will refresh on login) ──
+(function(){
+  try{const s=localStorage.getItem('gd2-animals');if(s){const p=JSON.parse(s);if(Array.isArray(p))A=p;}}catch(e){}
+  try{const s=localStorage.getItem('gd2-preg');   if(s){const p=JSON.parse(s);if(Array.isArray(p))P=p;}}catch(e){}
+  try{const s=localStorage.getItem('gd2-lact');   if(s){const p=JSON.parse(s);if(Array.isArray(p))L=p;}}catch(e){}
+  try{const s=localStorage.getItem('gd2-log');    if(s){const p=JSON.parse(s);if(Array.isArray(p))G=p;}}catch(e){}
+  try{const s=localStorage.getItem('gd2-health'); if(s){const p=JSON.parse(s);if(Array.isArray(p))H=p;}}catch(e){}
+  try{const s=localStorage.getItem('gd2-milk');   if(s){const p=JSON.parse(s);if(Array.isArray(p))M=p;}}catch(e){}
+})();
+
+
+// ---- FARM LOGO ----
+// ── HARDCODED LOGO (set by admin, baked into file) ──
+// This variable is set when admin uploads and downloads the updated file
+const HARDCODED_LOGO = '';
+
+function uploadFarmLogo(input){
+  const file=input.files[0];if(!file)return;
+  if(file.size>500*1024){alert('Logo must be under 500KB. Please resize the image first.');input.value='';return;}
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    const b64=e.target.result;
+    applyFarmLogo(b64);
+    try{localStorage.setItem('goudhan-logo',b64);}catch(err){}
+    // Save to Supabase as backup
+    const sb=await getSBAsync(3000);
+    if(sb){try{await sb.from('gd_settings').upsert({key:'farm_logo',value:b64,updated_at:new Date().toISOString()},{onConflict:'key'});}catch(err){}}
+    // Show download button — do NOT auto-download
+    showLogoDownloadBtn(b64);
+  };
+  reader.readAsDataURL(file);
+}
+
+function showLogoDownloadBtn(b64){
+  const card=document.getElementById('logo-upload-card');
+  if(!card)return;
+  const old=document.getElementById('logo-dl-msg');if(old)old.remove();
+  const msg=document.createElement('div');
+  msg.id='logo-dl-msg';
+  msg.style.cssText='margin-top:10px;padding:10px 14px;background:#E1F5EE;border:1px solid #9FE1CB;border-radius:8px;font-size:12px;color:#0F6E56;';
+  msg.innerHTML='<strong>✓ Logo uploaded!</strong> Click below to download the updated app file, then deploy it to Netlify to show the logo on all devices.<br><br><button id="logo-dl-btn" style="background:#0F6E56;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-top:4px;">⬇ Download updated index.html</button>';
+  card.appendChild(msg);
+  document.getElementById('logo-dl-btn').onclick=()=>downloadWithLogo(b64);
+}
+
+async function downloadWithLogo(b64){
+  try{
+    setSyncStatus('⟳ Preparing download…','#f0a500');
+    // Fetch the raw HTML file from the server
+    const response=await fetch(window.location.href);
+    let html=await response.text();
+    // Replace the empty logo variable with the actual base64 logo
+    html=html.replace(
+      /const HARDCODED_LOGO = '[^']*';/,
+      "const HARDCODED_LOGO = '"+b64+"';"
+    );
+    const blob=new Blob([html],{type:'text/html'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;
+    a.download='index.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    setSyncStatus('✓ Downloaded — deploy to Netlify','#1D9E75');
+    setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),5000);
+  }catch(err){
+    console.warn('Download error:',err);
+    // Fallback: use outerHTML
+    let html=document.documentElement.outerHTML;
+    html=html.replace(
+      /const HARDCODED_LOGO = '[^']*';/,
+      "const HARDCODED_LOGO = '"+b64+"';"
+    );
+    const blob=new Blob([html],{type:'text/html'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url;a.download='index.html';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+}
+function applyFarmLogo(b64){
+  const li=document.getElementById('login-logo-img');
+  const le=document.getElementById('login-logo-emoji');
+  if(b64&&li){li.src=b64;li.style.display='block';if(le)le.style.display='none';}
+  else if(li){li.style.display='none';if(le)le.style.display='block';}
+  const ti=document.getElementById('topbar-logo-img');
+  const te=document.getElementById('topbar-logo-emoji');
+  if(b64&&ti){ti.src=b64;ti.style.display='block';if(te)te.style.display='none';}
+  else if(ti){ti.style.display='none';if(te)te.style.display='block';}
+}
+async function loadFarmLogo(){
+  // Apply local immediately
+  try{const saved=localStorage.getItem('goudhan-logo');if(saved)applyFarmLogo(saved);}catch(e){}
+  // Then fetch from Supabase
+  const sb=await getSBAsync();
+  if(sb){
+    try{
+      const {data,error}=await sb.from('gd_settings').select('value').eq('key','farm_logo').single();
+      if(!error&&data?.value){
+        applyFarmLogo(data.value);
+        try{localStorage.setItem('goudhan-logo',data.value);}catch(e){}
+      }
+    }catch(err){}
+  }
+}
+// fetchLogoOnLoad called at bottom of script after all functions defined
+function updateDashLogoPreview(input){
+  if(!input.files[0])return;
+  const r=new FileReader();
+  r.onload=e=>{
+    const p=document.getElementById('dash-logo-preview');
+    if(p)p.innerHTML=`<img src="${e.target.result}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;">`;
+  };
+  r.readAsDataURL(input.files[0]);
+}
+function showLogoCardIfAdmin(){
+  const card=document.getElementById('logo-upload-card');
+  const isAdmin=(currentRole==='admin');
+  if(card)card.style.display=isAdmin?'block':'none';
+  try{
+    const saved=localStorage.getItem('goudhan-logo');
+    if(saved){const p=document.getElementById('dash-logo-preview');if(p)p.innerHTML=`<img src="${saved}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">`;}
+  }catch(e){}
+}
+function fetchLogoOnLoad(){
+  // 1. Hardcoded logo (baked into file — works on ALL devices, no internet needed)
+  if(HARDCODED_LOGO){applyFarmLogo(HARDCODED_LOGO);return;}
+  // 2. localStorage (same device only)
+  try{const saved=localStorage.getItem('goudhan-logo');if(saved){applyFarmLogo(saved);}}catch(e){}
+  // 3. Supabase (requires internet + library load)
+  async function fetchFromCloud(){
+    const sb=await getSBAsync(5000);
+    if(!sb)return;
+    try{
+      const {data}=await sb.from('gd_settings').select('value').eq('key','farm_logo').maybeSingle();
+      if(data?.value){applyFarmLogo(data.value);try{localStorage.setItem('goudhan-logo',data.value);}catch(e){}}
+    }catch(err){}
+  }
+  fetchFromCloud();
+}
+
+
+// ── REMEMBER ME ──
+function handleRememberMe(){
+  const checked=document.getElementById('login-remember').checked;
+  if(!checked){
+    localStorage.removeItem('gd-remember-user');
+    localStorage.removeItem('gd-remember-pass');
+    localStorage.removeItem('gd-remember-on');
+    sessionStorage.removeItem('gd-remember-user');
+    sessionStorage.removeItem('gd-remember-pass');
+    sessionStorage.removeItem('gd-remember-on');
+  }
+}
+function saveRememberMe(username,password){
+  if(document.getElementById('login-remember')?.checked){
+    try{localStorage.setItem('gd-remember-user',username);localStorage.setItem('gd-remember-pass',password);localStorage.setItem('gd-remember-on','1');}catch(e){}
+    try{sessionStorage.setItem('gd-remember-user',username);sessionStorage.setItem('gd-remember-pass',password);sessionStorage.setItem('gd-remember-on','1');}catch(e){}
+  } else {
+    try{localStorage.removeItem('gd-remember-user');localStorage.removeItem('gd-remember-pass');localStorage.removeItem('gd-remember-on');}catch(e){}
+    try{sessionStorage.removeItem('gd-remember-user');sessionStorage.removeItem('gd-remember-pass');sessionStorage.removeItem('gd-remember-on');}catch(e){}
+  }
+}
+function loadRememberMe(){
+  const u=localStorage.getItem('gd-remember-user')||sessionStorage.getItem('gd-remember-user');
+  const p=localStorage.getItem('gd-remember-pass')||sessionStorage.getItem('gd-remember-pass');
+  const on=localStorage.getItem('gd-remember-on')||sessionStorage.getItem('gd-remember-on');
+  if(u&&p&&on){
+    const unEl=document.getElementById('login-username');
+    const pwEl=document.getElementById('login-password');
+    const cbEl=document.getElementById('login-remember');
+    if(unEl)unEl.value=u;
+    if(pwEl)pwEl.value=p;
+    if(cbEl)cbEl.checked=true;
+  }
+}
+// Auto-fill remembered credentials on page load
+// Auto-fill remembered credentials on page load
+window.addEventListener('DOMContentLoaded', loadRememberMe);
+
+// ── USER ACCOUNTS ──
+// To add/change users, edit this list
+const USERS = [
+  {username:'admin',    password:'girdhaam@123', role:'admin',    name:'Admin'},
+  {username:'manager',  password:'manager@123',  role:'manager',  name:'Manager'},
+  {username:'milkman',  password:'milk@123',     role:'milk',     name:'Milk Worker'},
+  {username:'vet',      password:'vet@123',      role:'vet',      name:'Veterinary'},
+  {username:'viewer',   password:'view@123',     role:'viewer',   name:'Viewer'},
+];
+
+// ── ROLE PERMISSIONS ──
+const ROLE_PERMS = {
+  admin:   {tabs:['dashboard','animals','pregnancy','lactation','health','milk','log','departures','alerts'], canAdd:true,  canEdit:true,  canRemove:true,  canExport:true},
+  manager: {tabs:['dashboard','animals','pregnancy','lactation','health','milk','departures','alerts'], canAdd:true,  canEdit:true,  canRemove:false, canExport:true},
+  milk:    {tabs:['dashboard','milk','alerts'],                                                               canAdd:false, canEdit:false, canRemove:false, canExport:false},
+  vet:     {tabs:['dashboard','animals','pregnancy','lactation','health','alerts'],                           canAdd:false, canEdit:false, canRemove:false, canExport:false},
+  viewer:  {tabs:['dashboard','animals','milk','alerts'],                                                     canAdd:false, canEdit:false, canRemove:false, canExport:false},
+};
+
+function getPerms(){return ROLE_PERMS[currentRole]||ROLE_PERMS.viewer;}
+
+function applyRBAC(){
+  const perms=getPerms();
+  // Show/hide tabs
+  document.querySelectorAll('.tabs .tab').forEach(t=>{
+    const onclick=t.getAttribute('onclick')||'';
+    const m=onclick.match(/showTab\('(\w+)'/);
+    if(m){t.style.display=perms.tabs.includes(m[1])?'':'none';}
+  });
+  // Show/hide add buttons, export buttons, remove buttons based on role
+  document.querySelectorAll('[data-role-add]').forEach(el=>el.style.display=perms.canAdd?'':'none');
+  document.querySelectorAll('[data-role-remove]').forEach(el=>el.style.display=perms.canRemove?'':'none');
+  document.querySelectorAll('[data-role-export]').forEach(el=>el.style.display=perms.canExport?'':'none');
+}
+
+function doLogin(){
+  const username=(document.getElementById('login-username')?.value||'').trim().toLowerCase();
+  const password=(document.getElementById('login-password')?.value||'').trim();
+  const err=document.getElementById('login-error');
+  const user=USERS.find(u=>u.username===username&&u.password===password);
+  if(!user){err.style.display='block';return;}
+  err.style.display='none';
+  saveRememberMe(username, password);
+  currentUser=user.name; currentRole=user.role;
+  document.getElementById('tb-name').textContent=user.name;
+  const rb=document.getElementById('tb-role');
+  rb.textContent=user.role.charAt(0).toUpperCase()+user.role.slice(1);
+  rb.className='role-badge role-'+(user.role==='admin'?'admin':'user');
+
+  // Show app immediately with local/default data
+  applyRBAC();
+  document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));
+  document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));
+  const dashEl=document.getElementById('dashboard');if(dashEl)dashEl.classList.add('active');
+  const tabs=document.querySelectorAll('.tabs .tab');
+  if(tabs[TABS['dashboard']])tabs[TABS['dashboard']].classList.add('active');
+  populateCows();render();
+  showLogoCardIfAdmin();
+  document.getElementById('login-page').style.display='none';
+  document.getElementById('app-wrap').style.display='block';
+  const td=today();
+  document.getElementById('m-date').value=td;
+  const drEl=document.getElementById('daily-report-date');if(drEl)drEl.value=td;
+  const ym=td.slice(0,7);
+  document.getElementById('milk-filter-month').value=ym;
+  document.getElementById('milk-summary-month').value=ym;
+  document.getElementById('topbar-date').textContent=new Date().toLocaleDateString('en-IN',{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+  updateTopbarDate();
+
+  // Load from Supabase in background — completely non-blocking
+  // Use setTimeout so login UI completes rendering first
+  setTimeout(function(){
+    setSyncStatus('⟳ Cloud…','#f0a500');
+    loadFromCloud().then(loaded=>{
+      if(loaded){
+        populateCows();render();
+        setSyncStatus('☁ Cloud','#aaa');
+      } else {
+        setSyncStatus('● Local','#aaa');
+      }
+    }).catch(()=>setSyncStatus('● Local','#aaa'));
+  }, 100);
+}
+async function doLogout(){
+  // Sync any pending data to cloud before clearing cache
+  clearTimeout(window._syncTimer);
+  await syncToCloud();
+  // Now safe to clear local cache
+  ['gd2-animals','gd2-preg','gd2-lact','gd2-log','gd2-health','gd2-milk','gd2-has-real-data'].forEach(k=>localStorage.removeItem(k));
+  currentUser='';currentRole='';
+  document.getElementById('login-page').style.display='flex';
+  document.getElementById('app-wrap').style.display='none';
+  if(document.getElementById('login-username'))document.getElementById('login-username').value='';
+  if(document.getElementById('login-password'))document.getElementById('login-password').value='';
+  loadRememberMe();
+}
+async function refreshFromCloud(){
+  // Sync pending data first before refreshing
+  clearTimeout(window._syncTimer);
+  setSyncStatus('⟳ Syncing…','#f0a500');
+  await syncToCloud();
+  // Now clear cache and reload fresh from Supabase
+  ['gd2-animals','gd2-preg','gd2-lact','gd2-log','gd2-health','gd2-milk','gd2-has-real-data'].forEach(k=>localStorage.removeItem(k));
+  loadFromCloud().then(loaded=>{
+    if(loaded){
+      populateCows();render();
+      setSyncStatus('✓ Refreshed','#1D9E75');
+      setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),2000);
+    } else {
+      setSyncStatus('● Refresh failed','#e88');
+    }
+  });
+}
+document.addEventListener('keydown',e=>{
+  if(e.key==='Enter'&&document.getElementById('login-page').style.display!=='none')doLogin();
+});
+
+// ═══════════════════════════════════════════════
+// SUPABASE SYNC ENGINE
+// ═══════════════════════════════════════════════
+const SB_URL = 'https://plqujrordybzncvvkqgg.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBscXVqcm9yZHliem5jdnZrcWdnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUzMTQyOTMsImV4cCI6MjA5MDg5MDI5M30.MOmPuTwzoRBteAUCKbdPqOlS0zgWiRgERMZr2FzyyZA';
+
+let _sb = null;
+function getSB(){
+  if(_sb)return _sb;
+  if(window.supabase && window.supabase.createClient){
+    _sb=window.supabase.createClient(SB_URL,SB_KEY);
+    return _sb;
+  }
+  return null;
+}
+function getSBAsync(timeoutMs=8000){
+  // Client is always ready since it's inline — just return immediately
+  return Promise.resolve(getSB());
+}
+
+// ── Sync status indicator ──
+function setSyncStatus(msg, color){
+  const el=document.getElementById('sync-status');
+  if(el){el.textContent=msg;el.style.color=color||'rgba(255,255,255,0.6)';}
+}
+function updateTopbarDate(){
+  const el=document.getElementById('topbar-date');
+  if(el){
+    el.textContent=new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short'});
+    el.style.display='';
+  }
+}
+
+// ── Map app data ↔ DB columns ──
+function animalToDb(a){return{tag:a.tag,tag_sl_no:a.tagSlNo||'',name:a.name||'',type:a.type||'',breed:a.breed||'',dob:a.dob||'',sex:a.sex||'',sire:a.sire||'',dam:a.dam||'',reason:a.reason||'',adddate:a.adddate||'',notes:a.notes||'',status:a.status||'Active',lactnum:a.lactnum||'',donor:a.donor||'',dondate:a.dondate||'',photo:a.photo||'',del_reason:a.delreason||'',del_date:a.deldate||'',del_notes:a.delnotes||'',del_purchaser:a.delpurchaser||'',del_price:a.delprice||'',del_cause:a.delcause||'',del_destination:a.deldestination||'',del_donateto:a.deldonateto||'',del_destinationdonate:a.deldestinationdonate||''};}
+function dbToAnimal(r){return{tag:r.tag,tagSlNo:r.tag_sl_no,name:r.name,type:r.type,breed:r.breed,dob:r.dob,sex:r.sex,sire:r.sire,dam:r.dam,reason:r.reason,adddate:r.adddate,notes:r.notes,status:r.status,lactnum:r.lactnum,donor:r.donor,dondate:r.dondate,photo:r.photo,delreason:r.del_reason,deldate:r.del_date,delnotes:r.del_notes,delpurchaser:r.del_purchaser,delprice:r.del_price,delcause:r.del_cause,deldestination:r.del_destination,deldonateto:r.del_donateto,deldestinationdonate:r.del_destinationdonate};}
+function milkToDb(m){return{id:m.id,cow:m.cow,date:m.date,morn:m.morn,eve:m.eve,partial:m.partial||false};}
+function dbToMilk(r){return{id:r.id,cow:r.cow,date:r.date,morn:r.morn,eve:r.eve,partial:r.partial};}
+function pregToDb(p){return{id:p.id,cow:p.cow,insem:p.insem,sire:p.sire||'',method:p.method||'',calving:p.calving||'',status:p.status||'Pregnant',outcome:p.outcome||'',calvdate:p.calvdate||'',notes:p.notes||''};}
+function dbToPreg(r){return{id:r.id,cow:r.cow,insem:r.insem,sire:r.sire,method:r.method,calving:r.calving,status:r.status,outcome:r.outcome,calvdate:r.calvdate,notes:r.notes};}
+function lactToDb(l){return{id:l.id,cow:l.cow,num:l.num||'',start_date:l.start||'',end_date:l.end||'',dryoff:l.dryoff||'',nextcalv:l.nextcalv||'',dry_reason:l.dryReason||'',total:l.total||'',peak:l.peak||'',notes:l.notes||'',source:l.source||'manual'};}
+function dbToLact(r){return{id:r.id,cow:r.cow,num:r.num,start:r.start_date,end:r.end_date,dryoff:r.dryoff,nextcalv:r.nextcalv,dryReason:r.dry_reason,total:r.total,peak:r.peak,notes:r.notes,source:r.source};}
+function healthToDb(h){return{id:h.id,tag:h.tag,date:h.date,type:h.type,diag:h.diag||'',drug:h.drug||'',dose:h.dose||'',vet:h.vet||'',next_due:h.next||'',notes:h.notes||''};}
+function dbToHealth(r){return{id:r.id,tag:r.tag,date:r.date,type:r.type,diag:r.diag,drug:r.drug,dose:r.dose,vet:r.vet,next:r.next_due,notes:r.notes};}
+function logToDb(l){return{date:l.date,tag:l.tag||'',name:l.name||'',type:l.type||'',action:l.action||'',reason:l.reason||'',logged_by:l.loggedBy||'',donor:l.donor||'',dondate:l.dondate||'',notes:l.notes||''};}
+function dbToLog(r){return{date:r.date,tag:r.tag,name:r.name,type:r.type,action:r.action,reason:r.reason,loggedBy:r.logged_by,donor:r.donor,dondate:r.dondate,notes:r.notes};}
+
+// ── LOCAL SAVE (instant, always runs) ──
+function saveLocal(){
+  try{localStorage.setItem('gd2-animals',JSON.stringify(A));}catch(e){}
+  try{localStorage.setItem('gd2-preg',   JSON.stringify(P));}catch(e){}
+  try{localStorage.setItem('gd2-lact',   JSON.stringify(L));}catch(e){}
+  try{localStorage.setItem('gd2-log',    JSON.stringify(G));}catch(e){}
+  try{localStorage.setItem('gd2-health', JSON.stringify(H));}catch(e){}
+  try{localStorage.setItem('gd2-milk',   JSON.stringify(M));}catch(e){}
+}
+
+// ── CLOUD SYNC (async, fires after local save) ──
+async function syncToCloud(){
+  const sb=await getSBAsync();if(!sb){setSyncStatus('● Offline','#e88');return;}
+  setSyncStatus('⟳ Syncing…','#f0a500');
+  try{
+    await sb.from('gd_animals').upsert(A.map(animalToDb),{onConflict:'tag',ignoreDuplicates:false});
+    // Milk — only sync last 60 days to avoid timeout
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-60);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    const recentMilk=M.filter(m=>m.date>=cutoffStr);
+    if(recentMilk.length){
+      const {error:milkErr}=await sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id'});
+      if(milkErr)console.warn('Milk sync error:',milkErr);
+    }
+    if(P.length)await sb.from('gd_pregnancy').upsert(P.map(pregToDb),{onConflict:'id',ignoreDuplicates:false});
+    if(L.length)await sb.from('gd_lactation').upsert(L.map(lactToDb),{onConflict:'id',ignoreDuplicates:false});
+    if(H.length)await sb.from('gd_health').upsert(H.map(healthToDb),{onConflict:'id',ignoreDuplicates:false});
+    if(G.length){await sb.from('gd_log').insert(G.slice(0,3).map(logToDb)).select();}
+    setSyncStatus('✓ Synced','#1D9E75');
+    setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+  }catch(err){
+    setSyncStatus('● Sync error','#e88');
+    console.warn('Supabase sync error:',err);
+  }
+}
+
+// ── LOAD FROM CLOUD ──
+async function loadFromCloud(){
+  setSyncStatus('⟳ Loading…','#f0a500');
+  const headers={'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY};
+  const base=SB_URL+'/rest/v1/';
+  async function fetchTable(table,order){
+    try{
+      const url=base+table+'?select=*'+(order?'&order='+order:'');
+      const r=await fetch(url,{headers});
+      if(!r.ok){console.warn(table+' fetch error:',r.status);return[];}
+      return await r.json();
+    }catch(e){console.warn(table+' fetch exception:',e.message);return[];}
+  }
+  try{
+    const [ra,rm,rp,rl,rh,rg]=await Promise.all([
+      fetchTable('gd_animals','tag.asc'),
+      fetchTable('gd_milk','date.desc'),
+      fetchTable('gd_pregnancy',''),
+      fetchTable('gd_lactation',''),
+      fetchTable('gd_health','date.desc'),
+      fetchTable('gd_log','created_at.desc&limit=200'),
+    ]);
+    console.log('Loaded — animals:',ra.length,'milk:',rm.length,'preg:',rp.length,'lact:',rl.length,'health:',rh.length,'log:',rg.length);
+    A=ra.map(dbToAnimal);
+    M=rm.map(dbToMilk);
+    P=rp.map(dbToPreg);
+    L=rl.map(dbToLact);
+    H=rh.map(dbToHealth);
+    G=rg.map(dbToLog);
+    saveLocal();
+    localStorage.setItem('gd2-has-real-data','1');
+    setSyncStatus('✓ Loaded','#1D9E75');
+    setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),2000);
+    return true;
+  }catch(err){
+    setSyncStatus('● Load error','#e88');
+    console.warn('loadFromCloud error:',err);
+    return false;
+  }
+}
+
+// ── MAIN SAVE — local first, then cloud async ──
+function save(){
+  saveLocal();
+  clearTimeout(window._syncTimer);
+  window._syncTimer=setTimeout(syncToCloud,800);
+}
+function saveMilkNow(){
+  // Save locally first
+  saveLocal();
+  // Show saving indicator
+  const msg=document.getElementById('m-save-msg');
+  if(msg)msg.textContent='⟳ Saving to cloud…';
+  // Direct immediate Supabase save — no debounce
+  getSBAsync(5000).then(sb=>{
+    if(!sb){
+      if(msg)msg.textContent='✓ Saved locally (offline)';
+      setTimeout(()=>{if(msg)msg.textContent='';},3000);
+      return;
+    }
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-60);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    const recentMilk=M.filter(m=>m.date>=cutoffStr);
+    if(!recentMilk.length){
+      if(msg)msg.textContent='✓ Saved';
+      setTimeout(()=>{if(msg)msg.textContent='';},2000);
+      return;
+    }
+    sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id',ignoreDuplicates:false})
+    .then(({data,error})=>{
+      console.log('Milk upsert result — data:',data,'error:',error);
+      console.log('Records sent:',JSON.stringify(recentMilk.map(milkToDb)));
+      if(error){
+        console.warn('Milk save error:',error);
+        if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Error: '+error.message+' (code:'+error.code+')';}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },8000);
+      } else {
+        if(msg){msg.style.color='#1D9E75';msg.textContent='✓ Saved to cloud';}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },3000);
+        setSyncStatus('✓ Synced','#1D9E75');
+        setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+      }
+    }).catch(err=>{
+      console.warn('Milk save catch:',err);
+      if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Error: '+err.message;}
+      setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },5000);
+    });
+  });
+}
+
+function loadApp(){
+  // Called for compatibility - main init now in doLogin
+  populateCows();render();
+}
+
+const TABS={dashboard:0,animals:1,lactation:2,pregnancy:3,health:4,milk:5,departures:6,alerts:7,log:8};
+function showTab(id,ft){document.querySelectorAll('.section').forEach(s=>s.classList.remove('active'));document.querySelectorAll('.tabs .tab').forEach(t=>t.classList.remove('active'));document.getElementById(id).classList.add('active');const tabEls=document.querySelectorAll('.tabs .tab');if(tabEls[TABS[id]])tabEls[TABS[id]].classList.add('active');if(ft!==undefined){const el=document.getElementById('filter-type');if(el)el.value=ft;}render();if(id==='milk'){const bd=document.getElementById('bulk-date');if(bd&&!bd.value)bd.value=today();renderBulkMilk();}window.scrollTo({top:0,behavior:'instant'});}
+function openModal(id){document.getElementById(id).classList.add('open');}
+function closeModal(id){document.getElementById(id).classList.remove('open');}
+function v(id){return document.getElementById(id).value.trim();}
+function today(){return new Date().toISOString().slice(0,10);}
+function fmt(d){if(!d)return'—';const p=d.split('-');return p[2]+'/'+p[1]+'/'+p[0];}
+function onFarm(a){return a.status==='Active'||a.status==='Dry';}
+function tb(t){return`<span class="badge badge-${(t||'').toLowerCase()}">${t||'—'}</span>`;}
+function sb(s){if(s==='Active'||s==='Pregnant')return`<span class="badge badge-active">${s}</span>`;if(s==='Dry')return`<span class="badge badge-dry">${s}</span>`;return`<span class="badge badge-inactive">${s||'—'}</span>`;}
+function rb(r){if(!r)return'—';if(r==='Sold')return`<span class="badge badge-sold">Sold</span>`;if(r.startsWith('Died'))return`<span class="badge badge-died">${r}</span>`;if(r==='Transfer out')return`<span class="badge badge-transfer">Transfer out</span>`;if(r==='Donated')return`<span class="badge badge-donation">Donated</span>`;return`<span class="badge badge-inactive">${r}</span>`;}
+function du(d){if(!d)return null;return Math.round((new Date(d)-new Date(today()))/(1000*60*60*24));}
+function fl(n){return(n===undefined||n==='')?'—':parseFloat(n).toFixed(1)+'L';}
+function thumbHtml(photo,type){if(photo)return`<img src="${photo}" class="animal-thumb" alt="">`;const ic={Cow:'🐄',Bull:'🐂',Heifer:'🐄',Calf:'🐮'};return`<div class="animal-thumb-ph">${ic[type]||'🐄'}</div>`;}
+function detailPhotoHtml(photo,type){if(photo)return`<img src="${photo}" class="detail-photo" alt="">`;const ic={Cow:'🐄',Bull:'🐂',Heifer:'🐄',Calf:'🐮'};return`<div class="detail-photo-placeholder">${ic[type]||'🐄'}</div>`;}
+function previewPhoto(input){const file=input.files[0];if(!file)return;if(file.size>2*1024*1024){alert('Photo must be under 2MB.');input.value='';return;}const reader=new FileReader();reader.onload=e=>{pendingPhotoB64=e.target.result;const pv=document.getElementById('a-photo-preview'),ph=document.getElementById('a-photo-placeholder');pv.src=pendingPhotoB64;pv.style.display='block';ph.style.display='none';};reader.readAsDataURL(file);}
+function populateCows(){const cows=A.filter(a=>a.type==='Cow'&&a.status==='Active');['m-cow','milk-filter-cow'].forEach(sid=>{const sel=document.getElementById(sid);if(!sel)return;const first=sid==='milk-filter-cow'?'<option value="">All cows</option>':'<option value="">— select —</option>';sel.innerHTML=first+cows.map(c=>`<option value="${c.tag}">${c.tag}${c.name?' — '+c.name:''}</option>`).join('');});}
+function toggleCowFields(){document.getElementById('cow-fields').style.display=document.getElementById('a-type').value==='Cow'?'block':'none';}
+function setTagPrefix(){
+  const type=document.getElementById('a-type').value;
+  const tagEl=document.getElementById('a-tag');
+  const prefix=(type==='Cow'||type==='Heifer')?'C-':'B-';
+  const cur=tagEl.value.trim();
+  if(!cur||cur==='C-'||cur==='B-'){
+    tagEl.value=prefix;
+    tagEl.focus();
+    tagEl.setSelectionRange(prefix.length,prefix.length);
+  } else if(/^[CB]-/.test(cur)){
+    tagEl.value=prefix+cur.slice(2);
+  }
+}
+function padTagNumber(){
+  const tagEl=document.getElementById('a-tag');
+  const val=tagEl.value.trim();
+  if(!val)return;
+  // Match prefix (C- or B-) followed by digits
+  const m=val.match(/^([CB]-)(\d+)(.*)$/);
+  if(m){
+    const prefix=m[1];
+    const num=m[2].padStart(3,'0');
+    const rest=m[3];
+    tagEl.value=prefix+num+rest;
+  }
+}
+function toggleDonationFields(){document.getElementById('donation-fields').style.display=document.getElementById('a-reason').value==='Donation'?'block':'none';}
+function openPregModal(){
+  const sel=document.getElementById('p-cow');
+  const cows=A.filter(a=>onFarm(a)&&(a.type==='Cow'||a.type==='Heifer'));
+  sel.innerHTML='<option value="">— select cow —</option>'+
+    cows.map(a=>`<option value="${a.tag}">${a.tag}${a.name?' — '+a.name:''} (${a.status})</option>`).join('');
+  document.getElementById('p-insem').value=today();
+  openModal('preg-modal');
+}
+function toggleDeliveryFields(){document.getElementById('delivery-fields') && (document.getElementById('delivery-fields').style.display=document.getElementById('p-status').value==='Delivered'?'block':'none');}
+function toggleMilkEndFields(){const el=document.getElementById('milk-end-fields');if(el)el.style.display=document.getElementById('p-status')?.value==='Pregnant'?'block':'none';}
+
+function addPreg(){
+  const cow=v('p-cow');if(!cow){alert('Select a cow.');return;}
+  const insem=v('p-insem');if(!insem){alert('Insemination date required.');return;}
+  const status=v('p-status');
+  const milkEndDate=v('p-milk-end');
+  P.push({cow,insem,sire:v('p-sire'),method:v('p-method'),calving:v('p-calving'),status,outcome:'',calvdate:'',notes:v('p-notes'),id:Date.now()});
+  const a=A.find(x=>x.tag===cow);
+  if(milkEndDate){
+    if(a)a.status='Dry';
+    const curLact=L.find(l=>l.cow===cow&&!l.end);
+    if(curLact)curLact.end=milkEndDate;
+    G.unshift({date:milkEndDate,tag:cow,name:a?.name||'',type:'Cow',action:'Edited',reason:'Status → Dry — milk stopped',loggedBy:currentUser,donor:'',dondate:'',notes:'Milk stopped on '+milkEndDate});
+  }
+  save();render();closeModal('preg-modal');
+  ['p-sire','p-notes','p-calvdate','p-insem','p-calving','p-milk-end'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+  document.getElementById('p-cow').value='';
+  document.getElementById('p-status').value='Pregnant';
+}
+function deletePreg(id){if(!confirm('Delete this pregnancy record?'))return;P=P.filter(p=>p.id!=id);save();render();}
+let editingPregId=null;
+function openEditPreg(id){
+  const p=P.find(x=>x.id==id);if(!p)return;
+  editingPregId=id;
+  document.getElementById('ep-cow').value=p.cow||'';
+  document.getElementById('ep-insem').value=p.insem||'';
+  document.getElementById('ep-sire').value=p.sire||'';
+  document.getElementById('ep-method').value=p.method||'AI (Artificial)';
+  document.getElementById('ep-calving').value=p.calving||'';
+  document.getElementById('ep-status').value=p.status||'Pregnant';
+  document.getElementById('ep-notes').value=p.notes||'';
+  openModal('edit-preg-modal');
+}
+function saveEditPreg(){
+  const p=P.find(x=>x.id==editingPregId);if(!p)return;
+  p.insem=document.getElementById('ep-insem').value;
+  p.sire=document.getElementById('ep-sire').value;
+  p.method=document.getElementById('ep-method').value;
+  p.calving=document.getElementById('ep-calving').value;
+  p.status=document.getElementById('ep-status').value;
+  p.notes=document.getElementById('ep-notes').value;
+  save();render();closeModal('edit-preg-modal');editingPregId=null;
+}
+
+let deliveryPregId=null;
+function openDeliveryModal(id){
+  const p=P.find(x=>x.id===id);if(!p)return;
+  deliveryPregId=id;
+  const a=A.find(x=>x.tag===p.cow);
+  const info=document.getElementById('delivery-preg-info');
+  if(info)info.innerHTML=`🐄 <strong>${p.cow}${a?.name?' — '+a.name:''}</strong> &nbsp;·&nbsp; Inseminated: ${fmt(p.insem)} &nbsp;·&nbsp; Expected: ${fmt(p.calving)}`;
+  document.getElementById('d-date').value=today();
+  document.getElementById('d-tag').value='';
+  document.getElementById('d-notes').value='';
+  document.getElementById('d-outcome').value='Bull';
+  document.getElementById('d-condition').value='Healthy';
+  openModal('delivery-modal');
+}
+function saveDelivery(){
+  const p=P.find(x=>x.id===deliveryPregId);
+  if(!p){closeModal('delivery-modal');return;}
+  const ddate=v('d-date');if(!ddate){alert('Delivery date required.');return;}
+  const dtag=v('d-tag').trim();
+  const outcome=document.getElementById('d-outcome').value;
+  const condition=document.getElementById('d-condition').value;
+  const notes=v('d-notes');
+  const isFemale=outcome==='Heifer';
+  const isStillborn=outcome==='Stillborn';
+  const newType=isFemale?'Heifer':'Bull';
+  const newSex=isFemale?'Female':'Male';
+  // Update pregnancy record
+  p.status='Delivered';p.calvdate=ddate;p.outcome=outcome+(dtag?' — '+dtag:'');
+  const cow=p.cow;
+  const a=A.find(x=>x.tag===cow);
+  const nn=nextLact(cow);
+  // Create lactation for cow
+  L.push({cow,num:String(nn),start:ddate,end:'',total:'',peak:'',notes:'Auto — delivery '+outcome+(dtag?' tag: '+dtag:''),source:'auto',id:Date.now()});
+  if(a){a.lactnum=String(nn);a.status='Active';}
+  // Log delivery
+  G.unshift({date:ddate,tag:cow,name:a?.name||'',type:'Cow',action:'Delivered',reason:'Lactation #'+nn+' started',loggedBy:currentUser,donor:'',dondate:'',notes:'Outcome: '+outcome+(dtag?' | Tag: '+dtag:'')+(condition?' | '+condition:'')+(notes?' | '+notes:'')});
+  // Link previous lactation
+  const prevLacts=L.filter(l=>l.cow===cow).sort((a,b)=>(parseInt(b.num)||0)-(parseInt(a.num)||0));
+  const prevLact=prevLacts.find(l=>l.num!==String(nn));
+  if(prevLact&&!prevLact.nextcalv)prevLact.nextcalv=ddate;
+  save();render();
+  closeModal('delivery-modal');
+  deliveryPregId=null;
+  // Step 2 — Open Add GauDhan modal pre-filled for the newborn
+  if(!isStillborn){
+    setTimeout(function(){
+      // Switch to animals tab
+      showTab('animals');
+      // Open add modal
+      openModal('animal-modal');
+      setTagPrefix();
+      // Pre-fill fields
+      const typeEl=document.getElementById('a-type');
+      if(typeEl){typeEl.value=newType;toggleCowFields();setTagPrefix();}
+      if(dtag){const tagEl=document.getElementById('a-tag');if(tagEl)tagEl.value=dtag;}
+      const sexEl=document.getElementById('a-sex');if(sexEl)sexEl.value=newSex;
+      const dobEl=document.getElementById('a-dob');if(dobEl)dobEl.value=ddate;
+      const adddateEl=document.getElementById('a-adddate');if(adddateEl)adddateEl.value=ddate;
+      const breedEl=document.getElementById('a-breed');if(breedEl&&a?.breed)breedEl.value=a.breed;
+      const sireEl=document.getElementById('a-sire');if(sireEl)sireEl.value=p.sire||'';
+      const damEl=document.getElementById('a-dam');if(damEl)damEl.value=cow;
+      const reasonEl=document.getElementById('a-reason');if(reasonEl)reasonEl.value='Born on farm';
+      const notesEl=document.getElementById('a-notes');if(notesEl)notesEl.value='Born to '+cow+(a?.name?' ('+a.name+')':'');
+      // Show info banner
+      const banner=document.getElementById('delivery-preg-info');
+      // Alert user
+      alert('Delivery recorded! Complete the '+newType+' details and click Save animal to add to GauDhan.');
+    },300);
+  } else {
+    showTab('dashboard');
+  }
+}
+function toggleDelFields(){const r=document.getElementById('del-reason').value;document.getElementById('del-sold').style.display=r==='Sold'?'block':'none';document.getElementById('del-death').style.display=(r==='Died - natural'||r==='Died - disease')?'block':'none';document.getElementById('del-transfer').style.display=r==='Transfer out'?'block':'none';document.getElementById('del-donated').style.display=r==='Donated'?'block':'none';}
+
+function updateMilkSessionUI(){const s=document.getElementById('m-session').value;const mg=document.getElementById('morn-group'),eg=document.getElementById('eve-group');mg.style.opacity=s==='evening'?'0.35':'1';eg.style.opacity=s==='morning'?'0.35':'1';mg.style.pointerEvents=s==='evening'?'none':'auto';eg.style.pointerEvents=s==='morning'?'none':'auto';if(s==='evening')document.getElementById('m-morn').value='';if(s==='morning')document.getElementById('m-eve').value='';calcMilkTotal();}
+function calcMilkTotal(){const mo=parseFloat(document.getElementById('m-morn').value)||0,ev=parseFloat(document.getElementById('m-eve').value)||0;document.getElementById('m-total-display').textContent=(mo+ev)>0?(mo+ev).toFixed(1)+' L':'—';}
+function addMilk(){
+  const date=v('m-date'),cow=v('m-cow'),session=document.getElementById('m-session')?document.getElementById('m-session').value:'both';
+  if(!date){alert('Date required.');return;}if(!cow){alert('Select a cow.');return;}
+  const moRaw=document.getElementById('m-morn').value,evRaw=document.getElementById('m-eve').value;
+  const mo=moRaw!==''?parseFloat(moRaw):null,ev=evRaw!==''?parseFloat(evRaw):null;
+  if(session==='morning'&&mo===null){alert('Enter morning yield.');return;}
+  if(session==='evening'&&ev===null){alert('Enter evening yield.');return;}
+  if(session==='both'&&mo===null&&ev===null){alert('Enter at least one value.');return;}
+  const idx=M.findIndex(r=>r.cow===cow&&r.date===date);
+  if(idx>=0){const rec=M[idx];if(session==='morning'||session==='both')rec.morn=mo;if(session==='evening'||session==='both')rec.eve=ev;rec.partial=rec.morn===null||rec.eve===null;}
+  else{const nr={id:Date.now(),cow,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};nr.partial=nr.morn===null||nr.eve===null;M.push(nr);}
+  saveMilkNow();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();
+  document.getElementById('m-morn').value='';document.getElementById('m-eve').value='';document.getElementById('m-total-display').textContent='—';
+  if(document.getElementById('m-session'))document.getElementById('m-session').value='both';
+  const msg=document.getElementById('m-save-msg');msg.textContent=session==='morning'?'✓ Morning saved — add evening later':session==='evening'?'✓ Evening added':'✓ Saved';
+  setTimeout(()=>msg.textContent='',3000);
+}
+function deleteMilk(id){M=M.filter(r=>r.id!=id);save();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();}
+
+let editingMilkId=null;
+function editMilk(id){
+  const r=M.find(x=>x.id===id);if(!r)return;
+  editingMilkId=id;
+  const cowA=A.find(a=>a.tag===r.cow);
+  document.getElementById('edit-milk-title').textContent='Edit milk — '+r.cow+(cowA?.name?' ('+cowA.name+')':'');
+  document.getElementById('edit-milk-info').textContent='Date: '+fmt(r.date);
+  const mornEl=document.getElementById('em-morn');
+  const eveEl=document.getElementById('em-eve');
+  mornEl.value=r.morn!==null&&r.morn!==undefined?r.morn:'';
+  eveEl.value=r.eve!==null&&r.eve!==undefined?r.eve:'';
+  updateEmTotal();
+  mornEl.oninput=updateEmTotal;
+  eveEl.oninput=updateEmTotal;
+  openModal('edit-milk-modal');
+}
+function updateEmTotal(){
+  const mo=parseFloat(document.getElementById('em-morn').value)||0;
+  const ev=parseFloat(document.getElementById('em-eve').value)||0;
+  document.getElementById('em-total').textContent=(mo+ev).toFixed(1)+' L';
+}
+function saveMilkEdit(){
+  const r=M.find(x=>x.id===editingMilkId);if(!r){closeModal('edit-milk-modal');return;}
+  const moRaw=document.getElementById('em-morn').value;
+  const evRaw=document.getElementById('em-eve').value;
+  r.morn=moRaw!==''?parseFloat(moRaw):null;
+  r.eve=evRaw!==''?parseFloat(evRaw):null;
+  r.partial=r.morn===null||r.eve===null;
+  save();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();
+  closeModal('edit-milk-modal');
+  editingMilkId=null;
+}
+
+// ---- DAILY COW-WISE REPORT ----
+function renderDailyReport(){
+  const el=document.getElementById('daily-report-body');if(!el)return;
+  const dateEl=document.getElementById('daily-report-date');
+  const selDate=dateEl?dateEl.value:today();
+  if(!selDate){el.innerHTML=`<div style="font-size:13px;color:#9abfb2;">Select a date to view the daily report.</div>`;return;}
+  const recs=M.filter(r=>r.date===selDate);
+  const activeCows=A.filter(a=>a.type==='Cow'&&onFarm(a));
+  if(!activeCows.length){el.innerHTML=`<div style="font-size:13px;color:#9abfb2;">No cows on farm.</div>`;return;}
+  let totalMorn=0,totalEve=0,totalAll=0;
+  const rows=activeCows.map(c=>{
+    const rec=recs.find(r=>r.cow===c.tag);
+    const mo=rec&&rec.morn!==null&&rec.morn!==undefined?parseFloat(rec.morn):null;
+    const ev=rec&&rec.eve!==null&&rec.eve!==undefined?parseFloat(rec.eve):null;
+    const tot=(mo||0)+(ev||0);
+    totalMorn+=(mo||0);totalEve+=(ev||0);totalAll+=tot;
+    const moCell=mo!==null?`<strong>${mo.toFixed(1)}</strong>`:`<span style="color:#ccc;">—</span>`;
+    const evCell=ev!==null?`<strong>${ev.toFixed(1)}</strong>`:`<span style="color:#ccc;">—</span>`;
+    const status=!rec?'<span class="badge badge-inactive" style="font-size:10px;">Not recorded</span>':rec.partial?'<span class="badge badge-partial">Partial</span>':'<span class="badge badge-active" style="font-size:10px;">Complete</span>';
+    return`<tr><td>${thumbHtml(c.photo,c.type)}</td><td style="font-weight:600;">${c.tag}</td><td>${c.name||'—'}</td><td style="text-align:center;">${moCell}</td><td style="text-align:center;">${evCell}</td><td style="text-align:center;font-weight:700;color:#0F6E56;">${tot>0?tot.toFixed(1):'—'}</td><td>${status}</td></tr>`;
+  }).join('');
+  el.innerHTML=`
+    <div id="daily-report-print">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:8px;">
+        <div style="font-size:13px;color:#5a8a78;font-weight:600;">Date: ${fmt(selDate)}</div>
+        <div style="display:flex;gap:16px;">
+          <span style="font-size:13px;"><span style="color:#5a8a78;">☀ Morning:</span> <strong>${totalMorn.toFixed(1)} L</strong></span>
+          <span style="font-size:13px;"><span style="color:#5a8a78;">🌙 Evening:</span> <strong>${totalEve.toFixed(1)} L</strong></span>
+          <span style="font-size:14px;color:#0F6E56;font-weight:700;">Total: ${totalAll.toFixed(1)} L</span>
+        </div>
+      </div>
+      <div class="table-wrap"><table>
+        <thead><tr><th>Photo</th><th>Tag</th><th>Name</th><th style="text-align:center;">Morning (L)</th><th style="text-align:center;">Evening (L)</th><th style="text-align:center;">Total (L)</th><th>Status</th></tr></thead>
+        <tbody>${rows}</tbody>
+        <tfoot><tr class="total-row"><td colspan="3" style="text-align:right;">Herd total</td><td style="text-align:center;">${totalMorn.toFixed(1)}</td><td style="text-align:center;">${totalEve.toFixed(1)}</td><td style="text-align:center;font-size:15px;">${totalAll.toFixed(1)} L</td><td></td></tr></tfoot>
+      </table></div>
+    </div>`;
+}
+function printDailyReport(){
+  const dateEl=document.getElementById('daily-report-date');
+  const selDate=dateEl?dateEl.value:today();
+  const body=document.getElementById('daily-report-print');
+  if(!body){alert('Select a date first.');return;}
+  const w=window.open('','_blank');
+  w.document.write(`<!DOCTYPE html><html><head><title>GauDhan — Daily Milk Report ${fmt(selDate)}</title>
+  <style>body{font-family:Arial,sans-serif;padding:20px;color:#1a1a1a;}h2{color:#0F6E56;margin-bottom:4px;}h4{color:#5a8a78;margin-bottom:16px;}table{width:100%;border-collapse:collapse;font-size:13px;}th{background:#e4f0ea;padding:8px;text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:0.5px;}td{padding:7px 8px;border-bottom:1px solid #eef7f3;}tfoot td{background:#e4f5ec;font-weight:700;}.summary{display:flex;gap:24px;margin:12px 0;font-size:14px;}.sum-item{background:#f0f7f4;padding:8px 16px;border-radius:8px;border:1px solid #c8ddd6;}</style></head>
+  <body><h2>GiRDHAAM — GauDhan</h2><h4>Daily Milk Report — ${fmt(selDate)}</h4>${body.innerHTML}<br><p style="font-size:11px;color:#aaa;">Printed on ${new Date().toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric',hour:'2-digit',minute:'2-digit'})}</p></body></html>`);
+  w.document.close();setTimeout(()=>w.print(),400);
+}
+
+// ---- IMPORT FROM EXCEL ----
+function importMilkExcel(input){
+  const file=input.files[0];if(!file)return;
+  const msg=document.getElementById('milk-import-msg');
+  msg.style.color='#7aaa96';msg.textContent='⏳ Reading file...';
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      let lines=[];
+      if(file.name.endsWith('.csv')){
+        lines=e.target.result.split(/\r?\n/).filter(l=>l.trim()&&!/^"?Date"?/i.test(l));
+      } else {
+        const wb=XLSX.read(e.target.result,{type:'binary'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        const data=XLSX.utils.sheet_to_csv(ws);
+        lines=data.split(/\r?\n/).filter(l=>l.trim()&&!/^"?Date"?/i.test(l));
+      }
+      if(!lines.length){msg.style.color='#c0392b';msg.textContent='File appears empty or header-only.';return;}
+      let added=0,updated=0,errors=0;
+      lines.forEach(line=>{
+        const cols=line.split(',').map(c=>c.replace(/^"|"$/g,'').trim());
+        if(cols.length<2)return;
+        let dateRaw=cols[0],cowTag=(cols[1]||'').toUpperCase();
+        let date=dateRaw;
+        if(/^\d{2}\/\d{2}\/\d{4}$/.test(dateRaw)){const p=dateRaw.split('/');date=`${p[2]}-${p[1]}-${p[0]}`;}
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||!cowTag){errors++;return;}
+        const mo=cols[2]&&cols[2]!==''?parseFloat(cols[2]):null;
+        const ev=cols[3]&&cols[3]!==''?parseFloat(cols[3]):null;
+        const idx=M.findIndex(r=>r.cow===cowTag&&r.date===date);
+        if(idx>=0){if(mo!==null)M[idx].morn=mo;if(ev!==null)M[idx].eve=ev;M[idx].partial=M[idx].morn===null||M[idx].eve===null;updated++;}
+        else{M.push({id:Date.now()+Math.floor(Math.random()*1000),cow:cowTag,date,morn:mo,eve:ev,partial:mo===null||ev===null});added++;}
+      });
+      save();render();
+      msg.style.color='#0F6E56';
+      msg.textContent=`✓ Import done — ${added} new records, ${updated} updated${errors>0?`, ${errors} skipped (bad date/format)`:''}`;
+    }catch(err){msg.style.color='#c0392b';msg.textContent='Error reading file. Please use the template.';}
+  };
+  if(file.name.endsWith('.csv'))reader.readAsText(file);
+  else reader.readAsBinaryString(file);
+  input.value='';
+}
+
+function downloadMilkImportTemplate(){
+  const wb=XLSX.utils.book_new();
+  const data=[
+    ['Date','Cow Tag','Morning (L)','Evening (L)'],
+    ['YYYY-MM-DD','C-001','',''],
+    ['YYYY-MM-DD','C-002','',''],
+  ];
+  const ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:14},{wch:12},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,'Milk Import Template');
+  XLSX.writeFile(wb,'girdhaam_milk_import_template.xlsx');
+}
+
+// ---- EXPORT MILK AS EXCEL (.xlsx) ----
+function exportMilkExcel(){
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded. Please check internet connection.');return;}
+  const fc=document.getElementById('milk-filter-cow')?.value||'';
+  const fm=document.getElementById('milk-filter-month')?.value||'';
+  const filtered=M.filter(r=>{if(fc&&r.cow!==fc)return false;if(fm&&!r.date.startsWith(fm))return false;return true;}).sort((a,b)=>a.date.localeCompare(b.date)||a.cow.localeCompare(b.cow));
+  const wb=XLSX.utils.book_new();
+
+  // --- Sheet 1: Daily Records ---
+  const dailyData=[['GiRDHAAM — GauDhan | Daily Milk Records'],[''],['Date','Cow Tag','Cow Name','Morning (L)','Evening (L)','Daily Total (L)','Status']];
+  filtered.forEach(r=>{
+    const c=A.find(a=>a.tag===r.cow);
+    const mo=r.morn!==null&&r.morn!==undefined?parseFloat(r.morn):'';
+    const ev=r.eve!==null&&r.eve!==undefined?parseFloat(r.eve):'';
+    const tot=(parseFloat(r.morn)||0)+(parseFloat(r.eve)||0);
+    dailyData.push([r.date,r.cow,c?.name||'',mo,ev,parseFloat(tot.toFixed(1)),r.partial?'Partial':'Complete']);
+  });
+  // Herd total rows per day
+  const byDate={};filtered.forEach(r=>{byDate[r.date]=(byDate[r.date]||0)+(parseFloat(r.morn)||0)+(parseFloat(r.eve)||0);});
+  const ws1=XLSX.utils.aoa_to_sheet(dailyData);
+  ws1['!cols']=[{wch:14},{wch:10},{wch:18},{wch:14},{wch:14},{wch:14},{wch:12}];
+  ws1['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}}];
+  XLSX.utils.book_append_sheet(wb,ws1,'Daily Records');
+
+  // --- Sheet 2: Monthly Summary ---
+  const monthSet=new Set(filtered.map(r=>r.date.slice(0,7)));
+  const summaryData=[['GiRDHAAM — GauDhan | Monthly Milk Summary'],[''],['Month','Cow Tag','Cow Name','Days Recorded','Total Yield (L)','Avg Per Day (L)','Best Day (L)']];
+  monthSet.forEach(ym=>{
+    const monthRecs=filtered.filter(r=>r.date.startsWith(ym));
+    const cm={};
+    monthRecs.forEach(r=>{if(!cm[r.cow])cm[r.cow]={total:0,days:0,best:0};const tt=(parseFloat(r.morn)||0)+(parseFloat(r.eve)||0);cm[r.cow].total+=tt;cm[r.cow].days++;if(tt>cm[r.cow].best)cm[r.cow].best=tt;});
+    Object.entries(cm).sort((a,b)=>b[1].total-a[1].total).forEach(([tag,d])=>{
+      const c=A.find(a=>a.tag===tag);
+      summaryData.push([ym,tag,c?.name||'',d.days,parseFloat(d.total.toFixed(1)),parseFloat((d.total/d.days).toFixed(1)),parseFloat(d.best.toFixed(1))]);
+    });
+    const grand=Object.values(cm).reduce((s,d)=>s+d.total,0);
+    summaryData.push([ym,'','TOTAL',Object.values(cm).reduce((s,d)=>s+d.days,0),parseFloat(grand.toFixed(1)),'','']);
+    summaryData.push(['']);
+  });
+  const ws2=XLSX.utils.aoa_to_sheet(summaryData);
+  ws2['!cols']=[{wch:10},{wch:10},{wch:18},{wch:16},{wch:16},{wch:16},{wch:14}];
+  ws2['!merges']=[{s:{r:0,c:0},e:{r:0,c:6}}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Monthly Summary');
+
+  const suffix=fm?`_${fm}`:fc?`_${fc}`:'_all';
+  XLSX.writeFile(wb,`girdhaam_milk${suffix}.xlsx`);
+}
+
+// ---- GODHAN CRUD ----
+function addAnimal(){const tag=v('a-tag');if(!tag){alert('Tag required.');return;}if(A.find(a=>a.tag===tag)){alert('Tag already exists.');return;}const type=v('a-type'),reason=v('a-reason'),donor=v('a-donor'),dondate=v('a-dondate'),lactnum=v('a-lactnum');if(reason==='Donation'&&!donor){alert('Donor name required.');return;}if(reason==='Donation'&&!dondate){alert('Donation date required.');return;}const animal={tagSlNo:v('a-tagslno'),tag,name:v('a-name'),type,breed:v('a-breed')||'Gir',dob:v('a-dob'),sex:v('a-sex'),sire:v('a-sire'),dam:v('a-dam'),reason,adddate:v('a-adddate')||today(),notes:v('a-notes'),status:'Active',lactnum:lactnum||'',donor:reason==='Donation'?donor:'',dondate:reason==='Donation'?dondate:'',photo:pendingPhotoB64||''};A.push(animal);if(type==='Cow'&&lactnum)L.push({cow:tag,num:lactnum,start:v('a-lactstart'),end:'',total:v('a-lacttotal'),peak:v('a-lactpeak'),notes:'At addition',source:'manual',id:Date.now()});G.unshift({date:animal.adddate,tag,name:animal.name,type,action:'Added',reason,loggedBy:currentUser,donor:animal.donor,dondate:animal.dondate,notes:animal.notes});populateCows();save();render();closeModal('animal-modal');['a-tagslno','a-tag','a-name','a-sire','a-dam','a-notes','a-lactnum','a-lacttotal','a-lactpeak','a-donor'].forEach(id=>document.getElementById(id).value='');['a-lactstart','a-dondate','a-dob','a-adddate'].forEach(id=>document.getElementById(id).value='');document.getElementById('a-breed').value='Gir';document.getElementById('a-reason').value='Born on farm';document.getElementById('donation-fields').style.display='none';document.getElementById('a-photo-input').value='';document.getElementById('a-photo-preview').style.display='none';document.getElementById('a-photo-placeholder').style.display='block';pendingPhotoB64='';}
+function deleteAnimal(tag){
+  const a=A.find(x=>x.tag===tag);
+  if(!confirm(`Remove ${a?.name||tag} from farm? This will move them to Departures.`))return;
+  pendingTag=tag;document.getElementById('del-title').textContent='Remove — '+(a?.name||tag);document.getElementById('del-date').value=today();document.getElementById('del-reason').value='Sold';toggleDelFields();openModal('delete-modal');
+}
+function confirmDelete(){const reason=v('del-reason'),notes=v('del-notes'),depdate=v('del-date')||today();if(reason==='Sold'&&!v('del-purchaser')){alert('Purchaser required.');return;}if(reason==='Donated'&&!v('del-donateto')){alert('"Donated to" required.');return;}const a=A.find(x=>x.tag===pendingTag);if(!a){closeModal('delete-modal');return;}Object.assign(a,{status:'Inactive',delreason:reason,delnotes:notes,deldate:depdate,delpurchaser:v('del-purchaser'),delprice:v('del-price'),delcause:v('del-cause'),deldestination:v('del-destination'),deldonateto:v('del-donateto'),deldestinationdonate:v('del-donatedest')});G.unshift({date:depdate,tag:a.tag,name:a.name,type:a.type,action:'Removed',reason,loggedBy:currentUser,donor:reason==='Sold'?v('del-purchaser'):(reason==='Donated'?v('del-donateto'):''),dondate:'',notes});populateCows();save();render();closeModal('delete-modal');['del-notes','del-purchaser','del-price','del-cause','del-destination','del-donateto','del-donatedest'].forEach(id=>document.getElementById(id).value='');pendingTag=null;}
+// addPreg, deletePreg, openDeliveryModal, saveDelivery defined above
+function nextLact(tag){const recs=L.filter(l=>l.cow===tag);if(!recs.length){const a=A.find(x=>x.tag===tag);return a&&a.lactnum?parseInt(a.lactnum)+1:1;}return Math.max(...recs.map(l=>parseInt(l.num)||0))+1;}
+function addLact(){
+  const cow=v('l-cow');if(!cow){alert('Cow tag required.');return;}
+  const end=v('l-end');
+  const nextcalv=v('l-nextcalv')||'';
+  L.push({cow,num:v('l-num'),start:v('l-start'),end,dryoff:end,nextcalv,total:v('l-total'),peak:v('l-peak'),notes:v('l-notes'),source:'manual',id:Date.now()});
+  const a=A.find(x=>x.tag===cow);
+  if(end){if(a&&onFarm(a))a.status='Dry';}
+  if(a&&v('l-num'))a.lactnum=v('l-num');
+  G.unshift({date:v('l-start')||today(),tag:cow,name:a?.name||'',type:'Cow',action:'Edited',reason:'Lactation #'+v('l-num')+' recorded manually',loggedBy:currentUser,donor:'',dondate:'',notes:end?'Dry-off: '+end:''});
+  save();render();closeModal('lact-modal');
+  ['l-cow','l-num','l-total','l-peak','l-notes','l-start','l-end','l-nextcalv'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
+}
+function updateLactEnd(id,val){const r=L.find(l=>l.id===id);if(!r)return;r.end=val;r.dryoff=val;if(val){const a=A.find(x=>x.tag===r.cow);if(a&&onFarm(a))a.status='Dry';}save();render();}
+function deleteLact(id){if(!confirm('Delete this lactation record?'))return;L=L.filter(l=>l.id!=id);save();render();}
+let editingLactId=null;
+function openEditLact(id){
+  const l=L.find(x=>x.id==id);if(!l)return;
+  editingLactId=id;
+  document.getElementById('el-cow').value=l.cow||'';
+  document.getElementById('el-num').value=l.num||'';
+  document.getElementById('el-start').value=l.start||'';
+  document.getElementById('el-end').value=l.end||'';
+  document.getElementById('el-nextcalv').value=l.nextcalv||'';
+  document.getElementById('el-total').value=l.total||'';
+  document.getElementById('el-peak').value=l.peak||'';
+  document.getElementById('el-notes').value=l.notes||'';
+  openModal('edit-lact-modal');
+}
+function saveEditLact(){
+  const l=L.find(x=>x.id==editingLactId);if(!l)return;
+  l.num=document.getElementById('el-num').value;
+  l.start=document.getElementById('el-start').value;
+  l.end=document.getElementById('el-end').value;
+  l.dryoff=document.getElementById('el-end').value;
+  l.nextcalv=document.getElementById('el-nextcalv').value;
+  l.total=document.getElementById('el-total').value;
+  l.peak=document.getElementById('el-peak').value;
+  l.notes=document.getElementById('el-notes').value;
+  // Update cow status based on dry-off
+  if(l.end){const a=A.find(x=>x.tag===l.cow);if(a&&onFarm(a))a.status='Dry';}
+  save();render();closeModal('edit-lact-modal');editingLactId=null;
+}
+
+let dryoffLactId=null;
+function openDryoffModal(id){
+  const l=L.find(x=>x.id===id);if(!l)return;
+  dryoffLactId=id;
+  const a=A.find(x=>x.tag===l.cow);
+  const info=document.getElementById('dryoff-lact-info');
+  if(info)info.innerHTML=`🐄 <strong>${l.cow}${a?.name?' — '+a.name:''}</strong> &nbsp;·&nbsp; Lactation #${l.num||'?'} &nbsp;·&nbsp; Started: ${fmt(l.start)}`;
+  document.getElementById('do-date').value=today();
+  document.getElementById('do-reason').value='Natural dry-off';
+  document.getElementById('do-total').value=l.total||'';
+  document.getElementById('do-peak').value=l.peak||'';
+  document.getElementById('do-notes').value='';
+  openModal('dryoff-modal');
+}
+function saveDryoff(){
+  const l=L.find(x=>x.id===dryoffLactId);if(!l){closeModal('dryoff-modal');return;}
+  const doDate=v('do-date');if(!doDate){alert('Dry-off date required.');return;}
+  l.end=doDate;l.dryoff=doDate;
+  l.dryReason=v('do-reason');
+  if(v('do-total'))l.total=v('do-total');
+  if(v('do-peak'))l.peak=v('do-peak');
+  if(v('do-notes'))l.notes=(l.notes?l.notes+' | ':'')+v('do-notes');
+  const a=A.find(x=>x.tag===l.cow);
+  if(a)a.status='Dry';
+  G.unshift({date:doDate,tag:l.cow,name:a?.name||'',type:'Cow',action:'Edited',reason:'Dry-off recorded — '+v('do-reason'),loggedBy:currentUser,donor:'',dondate:'',notes:'Lactation #'+l.num+' ended. Dry-off: '+doDate});
+  save();render();closeModal('dryoff-modal');
+  dryoffLactId=null;
+}
+function addHealth(){const tag=v('h-tag');if(!tag){alert('Tag required.');return;}H.push({tag,date:v('h-date')||today(),type:v('h-type'),diag:v('h-diag'),drug:v('h-drug'),dose:v('h-dose'),vet:v('h-vet'),next:v('h-next'),notes:v('h-notes'),id:Date.now()});save();render();closeModal('health-modal');['h-tag','h-diag','h-drug','h-dose','h-vet','h-notes','h-date','h-next'].forEach(id=>document.getElementById(id).value='');}
+function deleteHealth(id){H=H.filter(h=>h.id!=id);save();render();}
+let editingHealthId=null;
+function openEditHealth(id){
+  const h=H.find(x=>x.id==id);if(!h)return;
+  editingHealthId=id;
+  document.getElementById('eh-tag').value=h.tag||'';
+  document.getElementById('eh-date').value=h.date||'';
+  document.getElementById('eh-type').value=h.type||'Vaccination';
+  document.getElementById('eh-diag').value=h.diag||'';
+  document.getElementById('eh-drug').value=h.drug||'';
+  document.getElementById('eh-dose').value=h.dose||'';
+  document.getElementById('eh-vet').value=h.vet||'';
+  document.getElementById('eh-next').value=h.next||'';
+  document.getElementById('eh-notes').value=h.notes||'';
+  openModal('edit-health-modal');
+}
+function saveEditHealth(){
+  const h=H.find(x=>x.id==editingHealthId);if(!h)return;
+  h.date=document.getElementById('eh-date').value;
+  h.type=document.getElementById('eh-type').value;
+  h.diag=document.getElementById('eh-diag').value;
+  h.drug=document.getElementById('eh-drug').value;
+  h.dose=document.getElementById('eh-dose').value;
+  h.vet=document.getElementById('eh-vet').value;
+  h.next=document.getElementById('eh-next').value;
+  h.notes=document.getElementById('eh-notes').value;
+  save();render();closeModal('edit-health-modal');editingHealthId=null;
+}
+
+// ---- DETAIL VIEW ----
+function showDetail(tag){
+  editingDetailTag=tag;const a=A.find(x=>x.tag===tag);if(!a)return;document.getElementById('detail-title').textContent=(a.name?a.name+' — ':'')+a.tag;const aP=P.filter(p=>p.cow===tag),aL=L.filter(l=>l.cow===tag),aH=H.filter(h=>h.tag===tag),aM=M.filter(m=>m.cow===tag).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7);const fA=A.find(x=>x.tag===a.sire),mA=A.find(x=>x.tag===a.dam),off=A.filter(x=>x.sire===tag||x.dam===tag);let html=`<div class="detail-top">${detailPhotoHtml(a.photo,a.type)}<div class="detail-top-info"><div class="ds" style="margin-bottom:0;"><h4>Profile</h4><div class="dg"><div class="di"><span>Tag Sl. No.</span>${a.tagSlNo||'—'}</div><div class="di"><span>Tag</span>${a.tag}</div><div class="di"><span>Name</span>${a.name||'—'}</div><div class="di"><span>Type</span>${tb(a.type)}</div><div class="di"><span>Breed</span>${a.breed||'—'}</div><div class="di"><span>DOB</span>${fmt(a.dob)}</div><div class="di"><span>Sex</span>${a.sex||'—'}</div><div class="di"><span>Status</span>${sb(a.status)}</div><div class="di"><span>Lactation #</span>${a.lactnum||'—'}</div><div class="di"><span>Added via</span>${a.reason==='Donation'?'<span class="badge badge-donation">Donation</span>':a.reason||'—'}</div><div class="di"><span>Added on</span>${fmt(a.adddate)}</div>${a.reason==='Donation'?`<div class="di"><span>Donor</span>${a.donor||'—'}</div><div class="di"><span>Donation date</span>${fmt(a.dondate)}</div>`:''}</div></div></div></div>`;html+=`<div class="ds"><h4>Pedigree</h4><div class="dg"><div class="di"><span>Father</span>${a.sire?(fA?`<button class="lb" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${a.sire}'),100)">${a.sire}${fA.name?' — '+fA.name:''}</button>`:a.sire):'—'}</div><div class="di"><span>Mother</span>${a.dam?(mA?`<button class="lb" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${a.dam}'),100)">${a.dam}${mA.name?' — '+mA.name:''}</button>`:a.dam):'—'}</div></div>${off.length?`<div style="margin-top:8px;font-size:13px;"><span style="font-size:11px;color:#888;">Offspring: </span>${off.map(o=>`<button class="lb" style="margin-right:8px;" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${o.tag}'),100)">${o.tag}${o.name?' ('+o.name+')':''}</button>`).join('')}</div>`:''}</div>`;if(aM.length)html+=`<div class="ds"><h4>Recent milk records</h4><table><thead><tr><th>Date</th><th>Morning</th><th>Evening</th><th>Total</th></tr></thead><tbody>${aM.map(m=>`<tr><td>${fmt(m.date)}</td><td>${fl(m.morn)}</td><td>${fl(m.eve)}</td><td><strong>${(parseFloat(m.morn||0)+parseFloat(m.eve||0)).toFixed(1)}L</strong></td></tr>`).join('')}</tbody></table></div>`;if(aP.length)html+=`<div class="ds"><h4>Pregnancy records</h4><table><thead><tr><th>Insem.</th><th>Expected delivery</th><th>Method</th><th>Status</th><th>Calf / Heifer</th></tr></thead><tbody>${aP.map(p=>`<tr><td>${fmt(p.insem)}</td><td>${fmt(p.calving)}</td><td>${p.method}</td><td>${sb(p.status)}</td><td>${p.outcome||'—'}</td></tr>`).join('')}</tbody></table></div>`;if(aL.length)html+=`<div class="ds"><h4>Lactation records</h4><table><thead><tr><th>Cycle #</th><th>Source</th><th>Start</th><th>End</th><th>Total (L)</th><th>Peak</th></tr></thead><tbody>${aL.sort((a,b)=>(parseInt(a.num)||0)-(parseInt(b.num)||0)).map(l=>`<tr><td>${l.num||'—'}</td><td>${l.source==='auto'?'<span class="badge badge-auto">auto</span>':'Manual'}</td><td>${fmt(l.start)}</td><td>${fmt(l.end)}</td><td>${l.total?Number(l.total).toLocaleString():'—'}</td><td>${l.peak||'—'}</td></tr>`).join('')}</tbody></table></div>`;if(aH.length)html+=`<div class="ds"><h4>Health records</h4><table><thead><tr><th>Date</th><th>Type</th><th>Condition</th><th>Treatment</th><th>Next due</th></tr></thead><tbody>${aH.map(h=>`<tr><td>${fmt(h.date)}</td><td>${h.type}</td><td>${h.diag||'—'}</td><td>${h.drug||'—'}</td><td>${fmt(h.next)}</td></tr>`).join('')}</tbody></table></div>`;if(a.status==='Inactive'){let dep='';if(a.delreason==='Sold')dep=`<div class="di"><span>Purchaser</span>${a.delpurchaser||'—'}</div><div class="di"><span>Price</span>${a.delprice?'₹'+Number(a.delprice).toLocaleString():'—'}</div>`;else if(a.delreason?.startsWith('Died'))dep=`<div class="di"><span>Cause</span>${a.delcause||'—'}</div>`;else if(a.delreason==='Transfer out')dep=`<div class="di"><span>Destination</span>${a.deldestination||'—'}</div>`;else if(a.delreason==='Donated')dep=`<div class="di"><span>Donated to</span>${a.deldonateto||'—'}</div>`;html+=`<div class="ds"><h4>Departure details</h4><div class="dg"><div class="di"><span>Date</span>${fmt(a.deldate)}</div><div class="di"><span>Reason</span>${rb(a.delreason)}</div>${dep}<div class="di"><span>Notes</span>${a.delnotes||'—'}</div></div></div>`;}document.getElementById('detail-body').innerHTML=html;const editBtn=document.getElementById('detail-edit-btn');if(editBtn)editBtn.style.display=a.status==='Inactive'?'none':'inline-block';openModal('detail-modal');}
+
+function render(){renderAlerts();rMetrics();renderOvMilk();renderOvPreg();renderOvHealth();renderOvLog();renderOvLact();renderOvDep();renderMilkMetrics();renderMilk();renderMilkSummary();renderDailyReport();renderAnimals();renderPreg();renderLact();renderHealth();renderLog();renderDep();}
+
+function generateAlerts(){
+  const alerts=[];
+  const now=new Date();
+  const toDate=s=>s?new Date(s):null;
+  const daysDiff=(d)=>{if(!d)return null;return Math.round((d-now)/(1000*60*60*24));};
+
+  // 1. Calving due alerts
+  P.filter(p=>p.status==='Pregnant'&&p.calving).forEach(p=>{
+    const d=daysDiff(toDate(p.calving));
+    const a=A.find(x=>x.tag===p.cow);
+    const name=a?.name?a.name+' ('+p.cow+')':p.cow;
+    if(d!==null&&d<0) alerts.push({type:'calving',level:'red',icon:'🐄',title:'Overdue delivery — '+name,detail:'Expected '+fmt(p.calving)+' ('+Math.abs(d)+'d overdue)',tag:p.cow,action:"showTab('pregnancy')"});
+    else if(d!==null&&d<=3) alerts.push({type:'calving',level:'red',icon:'🐄',title:'Delivery very soon — '+name,detail:'Expected '+fmt(p.calving)+' (in '+d+'d)',tag:p.cow,action:"showTab('pregnancy')"});
+    else if(d!==null&&d<=7) alerts.push({type:'calving',level:'yellow',icon:'🐄',title:'Delivery in '+d+' days — '+name,detail:'Expected '+fmt(p.calving),tag:p.cow,action:"showTab('pregnancy')"});
+    else if(d!==null&&d<=21) alerts.push({type:'calving',level:'green',icon:'🐄',title:'Upcoming delivery — '+name,detail:'Expected '+fmt(p.calving)+' (in '+d+'d)',tag:p.cow,action:"showTab('pregnancy')"});
+  });
+
+  // 2. Vaccination / health due alerts
+  H.filter(h=>h.next).forEach(h=>{
+    const d=daysDiff(toDate(h.next));
+    const a=A.find(x=>x.tag===h.tag);
+    const name=a?.name?a.name+' ('+h.tag+')':h.tag;
+    if(d!==null&&d<0) alerts.push({type:'health',level:'red',icon:'💉',title:'Overdue: '+h.type+' — '+name,detail:h.drug?(h.drug+' was due '+fmt(h.next)):'Due '+fmt(h.next)+' ('+Math.abs(d)+'d overdue)',tag:h.tag,action:"showTab('health')"});
+    else if(d!==null&&d<=3) alerts.push({type:'health',level:'red',icon:'💉',title:h.type+' due very soon — '+name,detail:(h.drug||h.type)+' due '+fmt(h.next)+' (in '+d+'d)',tag:h.tag,action:"showTab('health')"});
+    else if(d!==null&&d<=7) alerts.push({type:'health',level:'yellow',icon:'💉',title:h.type+' due in '+d+' days — '+name,detail:(h.drug||h.type)+' due '+fmt(h.next),tag:h.tag,action:"showTab('health')"});
+    else if(d!==null&&d<=30) alerts.push({type:'health',level:'green',icon:'💉',title:h.type+' upcoming — '+name,detail:(h.drug||h.type)+' due '+fmt(h.next)+' (in '+d+'d)',tag:h.tag,action:"showTab('health')"});
+  });
+
+  // 3. Dry-off reminder — pregnant cow still milking, calving within 60 days
+  P.filter(p=>p.status==='Pregnant'&&p.calving).forEach(p=>{
+    const d=daysDiff(toDate(p.calving));
+    const a=A.find(x=>x.tag===p.cow);
+    if(d!==null&&d<=60&&d>0&&a&&a.status==='Active'){
+      const name=a?.name?a.name+' ('+p.cow+')':p.cow;
+      alerts.push({type:'dryoff',level:d<=30?'yellow':'green',icon:'🌾',title:'Dry-off reminder — '+name,detail:'Calving in '+d+'d. Consider dry-off 45-60 days before delivery.',tag:p.cow,action:"showTab('lactation')"});
+    }
+  });
+
+  // 4. Re-insemination due — cow calved 60+ days ago, not pregnant
+  A.filter(a=>a.type==='Cow'&&onFarm(a)).forEach(a=>{
+    const isPregnant=P.some(p=>p.cow===a.tag&&p.status==='Pregnant');
+    if(isPregnant)return;
+    const lacts=L.filter(l=>l.cow===a.tag&&l.start).sort((x,y)=>y.start.localeCompare(x.start));
+    if(!lacts.length)return;
+    const lastCalving=toDate(lacts[0].start);
+    const daysSince=daysDiff(lastCalving);
+    if(daysSince!==null&&Math.abs(daysSince)>=60){
+      const name=a.name?a.name+' ('+a.tag+')':a.tag;
+      alerts.push({type:'insem',level:Math.abs(daysSince)>=90?'red':'yellow',icon:'🔁',title:'Re-insemination due — '+name,detail:Math.abs(daysSince)+'d since last calving. Not yet re-inseminated.',tag:a.tag,action:"showTab('pregnancy')"});
+    }
+  });
+
+  // 5. New calf/heifer with no health check within 14 days
+  A.filter(a=>(a.type==='Calf'||a.type==='Heifer'||a.type==='Bull')&&onFarm(a)&&a.dob).forEach(a=>{
+    const age=Math.abs(daysDiff(toDate(a.dob)));
+    if(age>=7&&age<=60){
+      const hasHealth=H.some(h=>h.tag===a.tag);
+      if(!hasHealth){
+        const name=a.name?a.name+' ('+a.tag+')':a.tag;
+        alerts.push({type:'calfcheck',level:age>=14?'yellow':'green',icon:'🐮',title:'Health check needed — '+name,detail:a.type+' is '+age+'d old. No health record yet.',tag:a.tag,action:"showTab('health')"});
+      }
+    }
+  });
+
+  // Sort: red first, then yellow, then green
+  const order={red:0,yellow:1,green:2};
+  return alerts.sort((a,b)=>order[a.level]-order[b.level]);
+}
+
+// ── ALERT STATE ── stored in localStorage
+function getAlertState(){try{return JSON.parse(localStorage.getItem('gd-alert-state')||'{}')}catch(e){return{};}}
+function setAlertState(s){try{localStorage.setItem('gd-alert-state',JSON.stringify(s));}catch(e){}}
+function alertKey(a){return a.type+'|'+a.tag+'|'+a.title.slice(0,30);}
+function dismissAlert(key,status){const s=getAlertState();if(status==='__restore__'){delete s[key];}else{s[key]={status,time:Date.now()};}setAlertState(s);renderAlerts();}
+function clearOldDismissals(){
+  // Clear dismissals older than 7 days so alerts reappear if still relevant
+  const s=getAlertState();const now=Date.now();const week=7*24*60*60*1000;
+  let changed=false;
+  Object.keys(s).forEach(k=>{if(now-s[k].time>week){delete s[k];changed=true;}});
+  if(changed)setAlertState(s);
+}
+
+function renderAlerts(){
+  clearOldDismissals();
+  const allAlerts=generateAlerts();
+  const state=getAlertState();
+  // Split into active and dismissed
+  const active=allAlerts.filter(a=>!state[alertKey(a)]);
+  const dismissed=allAlerts.filter(a=>!!state[alertKey(a)]);
+  const urgent=active.filter(a=>a.level==='red').length;
+
+  // Update badge — only unseen urgent alerts
+  const badge=document.getElementById('alert-badge');
+  if(badge){
+    if(urgent>0){badge.textContent=urgent;badge.style.display='inline';}
+    else{badge.style.display='none';}
+  }
+
+  // Dashboard banner — only show if there are active urgent alerts
+  const el=document.getElementById('calving-alerts');
+  if(el){
+    const red=active.filter(a=>a.level==='red');
+    el.innerHTML=red.length
+      ? `<div class="alert-banner" onclick="showTab('alerts')" style="cursor:pointer;">🔔 <strong>${red.length} urgent alert${red.length>1?'s':''}</strong> — ${red.slice(0,2).map(a=>a.title).join(' | ')}${red.length>2?' +more':''} &nbsp;<span style="text-decoration:underline;">View →</span></div>`
+      : '';
+  }
+
+  // Render alerts tab
+  const body=document.getElementById('alerts-body');
+  if(!body)return;
+
+  const levelStyle={red:'background:#fff5f5;border-left:4px solid #e74c3c;',yellow:'background:#fffbf0;border-left:4px solid #f0a500;',green:'background:#f0faf5;border-left:4px solid #1D9E75;'};
+  const levelLabel={red:'Urgent',yellow:'Soon',green:'Upcoming'};
+  const levelColor={red:'#e74c3c',yellow:'#f0a500',green:'#1D9E75'};
+  const statusLabel={'completed':'✅ Completed','seen':'👁 Seen','ignored':'🚫 Ignored'};
+
+  const activeHtml=active.length?active.map(a=>{
+    const key=alertKey(a);
+    return `<div style="${levelStyle[a.level]}padding:12px 16px;border-bottom:1px solid #f0f0e8;">
+      <div style="display:flex;align-items:flex-start;gap:10px;">
+        <span style="font-size:22px;margin-top:2px;">${a.icon}</span>
+        <div style="flex:1;">
+          <div style="font-weight:600;font-size:13px;color:#1a1a1a;">${a.title}</div>
+          <div style="font-size:12px;color:#666;margin-top:2px;">${a.detail}</div>
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+            <button onclick="showTab('${a.action.replace(/showTab\('|'\)/g,'').replace(/.*'/,'')}');event.stopPropagation();" style="font-size:11px;padding:3px 10px;border:1px solid #1D9E75;border-radius:6px;background:#fff;color:#1D9E75;cursor:pointer;">→ Go to record</button>
+            <button onclick="dismissAlert('${key}','completed');event.stopPropagation();" style="font-size:11px;padding:3px 10px;border:1px solid #27ae60;border-radius:6px;background:#fff;color:#27ae60;cursor:pointer;">✅ Completed</button>
+            <button onclick="dismissAlert('${key}','seen');event.stopPropagation();" style="font-size:11px;padding:3px 10px;border:1px solid #888;border-radius:6px;background:#fff;color:#888;cursor:pointer;">👁 Seen</button>
+            <button onclick="dismissAlert('${key}','ignored');event.stopPropagation();" style="font-size:11px;padding:3px 10px;border:1px solid #e74c3c;border-radius:6px;background:#fff;color:#e74c3c;cursor:pointer;">🚫 Ignore</button>
+          </div>
+        </div>
+        <span style="font-size:10px;font-weight:700;color:${levelColor[a.level]};background:${a.level==='red'?'#fde8e8':a.level==='yellow'?'#fff3cd':'#d4f0e5'};padding:2px 8px;border-radius:10px;white-space:nowrap;flex-shrink:0;">${levelLabel[a.level]}</span>
+      </div>
+    </div>`;
+  }).join('') : `<div style="text-align:center;padding:40px 20px;color:#aaa;">
+    <div style="font-size:48px;margin-bottom:12px;">✅</div>
+    <div style="font-size:16px;font-weight:600;color:#0F6E56;">All clear!</div>
+    <div style="font-size:13px;margin-top:6px;">No active alerts. All caught up!</div>
+  </div>`;
+
+  const dismissedHtml=dismissed.length?`
+    <div style="margin-top:16px;">
+      <div style="font-size:12px;font-weight:600;color:#aaa;padding:8px 16px;background:#f8f8f5;border-top:1px solid #e8e8e0;display:flex;justify-content:space-between;align-items:center;">
+        <span>DISMISSED ALERTS (${dismissed.length})</span>
+        <button onclick="localStorage.removeItem('gd-alert-state');renderAlerts();" style="font-size:11px;color:#e74c3c;background:none;border:none;cursor:pointer;text-decoration:underline;">Clear all</button>
+      </div>
+      ${dismissed.map(a=>{
+        const key=alertKey(a);
+        const st=state[key];
+        return `<div style="background:#f8f8f5;padding:10px 16px;border-bottom:1px solid #f0f0e8;opacity:0.7;">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:18px;">${a.icon}</span>
+            <div style="flex:1;">
+              <div style="font-size:12px;color:#666;text-decoration:line-through;">${a.title}</div>
+              <div style="font-size:11px;color:#aaa;">${statusLabel[st.status]||st.status}</div>
+            </div>
+            <button onclick="dismissAlert('${key}','__restore__');renderAlerts();" style="font-size:10px;padding:2px 8px;border:1px solid #aaa;border-radius:6px;background:#fff;color:#666;cursor:pointer;">Restore</button>
+          </div>
+        </div>`;
+      }).join('')}
+    </div>` : '';
+
+  body.innerHTML = activeHtml + dismissedHtml;
+}
+function rMetrics(){const farm=A.filter(onFarm);const cows=farm.filter(a=>a.type==='Cow'),bulls=farm.filter(a=>a.type==='Bull'),calves=farm.filter(a=>a.type==='Calf'),heifers=farm.filter(a=>a.type==='Heifer');const total=farm.length;function sub(list){const ac=list.filter(x=>x.status==='Active').length,dr=list.filter(x=>x.status==='Dry').length;return dr>0?`${ac} active · ${dr} dry`:`${ac} active`;}const tAc=farm.filter(x=>x.status==='Active').length,tDr=farm.filter(x=>x.status==='Dry').length;function set(id,v){const el=document.getElementById(id);if(el)el.textContent=v;}set('mc-cows',cows.length);set('ms-cows',sub(cows));set('mc-heifers',heifers.length);set('ms-heifers',sub(heifers));set('mc-bulls',bulls.length);set('ms-bulls',sub(bulls));set('mc-calves',calves.length);set('ms-calves',sub(calves));set('mc-total',total);set('ms-total',tAc+' active · '+tDr+' dry');}
+
+function renderOvMilk(){const el=document.getElementById('ov-milk');if(!el)return;const td=today();const yd=new Date(td);yd.setDate(yd.getDate()-1);const ydStr=yd.toISOString().slice(0,10);const useDate=M.some(r=>r.date===td)?td:ydStr;const recs=M.filter(r=>r.date===useDate);if(!recs.length){el.innerHTML=`<div style="font-size:13px;color:#aaa;">No records yet for today.</div>`;return;}const tot=recs.reduce((s,r)=>s+parseFloat(r.morn||0)+parseFloat(r.eve||0),0);el.innerHTML=`<div style="margin-bottom:6px;font-size:12px;color:#888;">${useDate===td?'Today':'Yesterday'} &nbsp;|&nbsp; Total: <strong>${tot.toFixed(1)} L</strong></div><table><tbody>${recs.sort((a,b)=>a.cow.localeCompare(b.cow)).map(r=>{const cowA=A.find(a=>a.tag===r.cow);const t=parseFloat(r.morn||0)+parseFloat(r.eve||0);return`<tr><td>${thumbHtml(cowA?.photo,cowA?.type)}</td><td style="font-size:12px;color:#888;">${r.cow}</td><td style="font-size:12px;">${cowA?.name||''}</td><td style="font-size:12px;">☀ ${fl(r.morn)}</td><td style="font-size:12px;">🌙 ${fl(r.eve)}</td><td><strong>${t.toFixed(1)}L</strong></td></tr>`;}).join('')}</tbody></table>`;}
+function renderOvPreg(){const el=document.getElementById('ov-preg');if(!el)return;const preg=P.filter(p=>p.status==='Pregnant').sort((a,b)=>new Date(a.calving||'9999')-new Date(b.calving||'9999'));if(!preg.length){el.innerHTML=`<div style="font-size:13px;color:#aaa;">No active pregnancies.</div>`;return;}el.innerHTML=`<table><tbody>${preg.map(p=>{const d=du(p.calving);const dc=d===null?'—':d<=7?`<span class="badge badge-alert">${d}d left</span>`:d<=21?`<span class="badge badge-soon">${d}d left</span>`:`${d}d left`;const cowA=A.find(a=>a.tag===p.cow);return`<tr><td>${thumbHtml(cowA?.photo,cowA?.type)}</td><td style="font-size:12px;color:#888;">${p.cow}</td><td style="font-size:12px;">${cowA?.name||''}</td><td style="font-size:12px;">${fmt(p.calving)}</td><td>${dc}</td></tr>`;}).join('')}</tbody></table>`;}
+function renderOvHealth(){const el=document.getElementById('ov-health');if(!el)return;const rec=[...H].sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,4);if(!rec.length){el.innerHTML=`<div style="font-size:13px;color:#aaa;">No health records yet.</div>`;return;}el.innerHTML=`<table><tbody>${rec.map(h=>{const cowA=A.find(a=>a.tag===h.tag);return`<tr><td>${thumbHtml(cowA?.photo,cowA?.type)}</td><td style="font-size:12px;color:#888;">${fmt(h.date)}</td><td style="font-size:12px;">${h.tag}</td><td><span class="badge badge-bull" style="font-size:10px;">${h.type}</span></td><td style="font-size:12px;">${h.diag||h.drug||'—'}</td></tr>`;}).join('')}</tbody></table>`;}
+function renderOvLog(){const el=document.getElementById('ov-log');if(!el)return;const rec=G.slice(0,5);if(!rec.length){el.innerHTML=`<div style="font-size:13px;color:#aaa;">No activity yet.</div>`;return;}el.innerHTML=`<table><tbody>${rec.map(l=>`<tr><td style="font-size:12px;color:#888;">${fmt(l.date)}</td><td style="font-size:12px;">${l.tag}</td><td>${tb(l.type)}</td><td><span class="badge ${l.action==='Added'||l.action==='Calved'?'badge-active':'badge-inactive'}" style="font-size:10px;">${l.action}</span></td><td style="font-size:11px;color:#888;">${l.loggedBy||''}</td></tr>`).join('')}</tbody></table>`;}
+function renderOvLact(){const el=document.getElementById('ov-lact');if(!el)return;const act=L.filter(l=>!l.end).slice(0,4);if(!act.length){el.innerHTML=`<div style="font-size:13px;color:#aaa;">No active lactations.</div>`;return;}el.innerHTML=`<table><tbody>${act.map(l=>{const cowA=A.find(a=>a.tag===l.cow);return`<tr><td>${thumbHtml(cowA?.photo,'Cow')}</td><td style="font-size:12px;color:#888;">${l.cow}</td><td style="font-size:12px;">${cowA?.name||''}</td><td style="font-size:12px;">Cycle ${l.num||'—'}</td><td style="font-size:12px;">${fmt(l.start)}</td></tr>`;}).join('')}</tbody></table>`;}
+function renderOvDep(){const el=document.getElementById('ov-dep');if(!el)return;const dep=A.filter(a=>a.status==='Inactive').sort((a,b)=>(b.deldate||'').localeCompare(a.deldate||'')).slice(0,3);if(!dep.length){el.innerHTML=`<div style="font-size:13px;color:#aaa;">No departures recorded.</div>`;return;}el.innerHTML=`<table><tbody>${dep.map(a=>`<tr><td>${thumbHtml(a.photo,a.type)}</td><td style="font-size:12px;color:#888;">${fmt(a.deldate)}</td><td style="font-size:12px;">${a.tag}</td><td style="font-size:12px;">${a.name||'—'}</td><td>${rb(a.delreason)}</td></tr>`).join('')}</tbody></table>`;}
+function renderMilkMetrics(){const el=document.getElementById('milk-metrics');if(!el)return;const td=today();const ym=td.slice(0,7);const yd=new Date(td);yd.setDate(yd.getDate()-1);const ydStr=yd.toISOString().slice(0,10);const useDate=M.some(r=>r.date===td)?td:ydStr;const dr=M.filter(r=>r.date===useDate);const hT=dr.reduce((s,r)=>s+parseFloat(r.morn||0)+parseFloat(r.eve||0),0);const mT=M.filter(r=>r.date.startsWith(ym)).reduce((s,r)=>s+parseFloat(r.morn||0)+parseFloat(r.eve||0),0);const ct={};dr.forEach(r=>{ct[r.cow]=(ct[r.cow]||0)+parseFloat(r.morn||0)+parseFloat(r.eve||0);});const best=Object.entries(ct).sort((a,b)=>b[1]-a[1])[0];const uniq=new Set(dr.map(r=>r.cow)).size;const avg=uniq>0?hT/uniq:0;el.innerHTML=`<div class="metric metric-plain"><div class="mv-plain">${hT.toFixed(1)}L</div><div class="ml ml-plain">${useDate===td?'Today':'Yesterday'}'s total</div></div><div class="metric metric-plain"><div class="mv-plain">${mT.toFixed(1)}L</div><div class="ml ml-plain">This month</div></div><div class="metric metric-plain"><div class="mv-plain">${uniq}</div><div class="ml ml-plain">Cows milked</div></div><div class="metric metric-plain"><div class="mv-plain">${avg.toFixed(1)}L</div><div class="ml ml-plain">Avg per cow</div></div><div class="metric metric-plain"><div class="mv-plain">${best?best[1].toFixed(1)+'L':'—'}</div><div class="ml ml-plain">Best cow${best?' ('+best[0]+')':''}</div></div>`;}
+function renderAnimals(){
+  const t=document.getElementById('animal-table');if(!t)return;
+  const ft=document.getElementById('filter-type')?.value||'';
+  const fs=document.getElementById('filter-status')?.value||'';
+  const fr=document.getElementById('filter-reason')?.value||'';
+  const fq=(document.getElementById('filter-search')?.value||'').toLowerCase();
+  let list=A.filter(a=>{
+    if(!onFarm(a))return false;
+    if(ft&&a.type!==ft)return false;
+    if(fs&&a.status!==fs)return false;
+    if(fr&&a.reason!==fr)return false;
+    if(fq&&!a.tag.toLowerCase().includes(fq)&&!(a.name||'').toLowerCase().includes(fq)&&!(a.reason||'').toLowerCase().includes(fq))return false;
+    return true;
+  });
+  // Update count bar
+  const bar=document.getElementById('animals-count-bar');
+  if(bar){
+    const total=A.filter(onFarm).length;
+    const filtered=ft||fs||fr||fq;
+    if(filtered){
+      bar.style.display='block';
+      const parts=[];
+      if(ft)parts.push(ft);
+      if(fs)parts.push(fs);
+      if(fr)parts.push(fr);
+      if(fq)parts.push(`"${fq}"`);
+      bar.innerHTML=`${list.length} of ${total} GauDhan &nbsp;·&nbsp; <span style="font-size:12px;font-weight:400;color:#5a8a78;">Filtered by: ${parts.join(', ')}</span>`;
+    } else {
+      bar.style.display='block';
+      bar.innerHTML=`${total} GauDhan on farm`;
+    }
+  }
+  if(!list.length){t.innerHTML=`<tr><td colspan="13" class="empty">No GauDhan found.</td></tr>`;return;}if(!list.length){t.innerHTML=`<tr><td colspan="13" class="empty">No GauDhan found.</td></tr>`;return;}t.innerHTML=list.map(a=>`<tr><td>${thumbHtml(a.photo,a.type)}</td><td>${a.tagSlNo||'—'}</td><td><button class="lb" onclick="showDetail('${a.tag}')">${a.tag}</button></td><td>${a.name||'—'}</td><td>${tb(a.type)}</td><td>${a.breed||'—'}</td><td>${fmt(a.dob)}</td><td>${a.sire||'—'}</td><td>${a.dam||'—'}</td><td>${a.lactnum||'—'}</td><td>${a.reason==='Donation'?'<span class="badge badge-donation">Donation</span>':a.reason||'—'}</td><td>${sb(a.status)}</td><td style="white-space:nowrap;"><button class="btn btn-sm" style="margin-right:4px;" onclick="editAnimal('${a.tag}')">✏ Edit</button><button class="btn btn-danger" onclick="deleteAnimal('${a.tag}')">Remove</button></td></tr>`).join('');}
+function renderMilk(){const t=document.getElementById('milk-table');if(!t)return;const fc=document.getElementById('milk-filter-cow')?.value||'';const fm=document.getElementById('milk-filter-month')?.value||'';let list=M.filter(r=>{if(fc&&r.cow!==fc)return false;if(fm&&!r.date.startsWith(fm))return false;return true;}).sort((a,b)=>b.date.localeCompare(a.date)||a.cow.localeCompare(b.cow));if(!list.length){t.innerHTML=`<tr><td colspan="7" class="empty">No records for this filter.</td></tr>`;return;}const dg={};list.forEach(r=>{dg[r.date]=(dg[r.date]||0)+(parseFloat(r.morn)||0)+(parseFloat(r.eve)||0);});let rows='',ld='';list.forEach(r=>{if(!fc&&ld&&ld!==r.date)rows+=`<tr class="total-row"><td>${fmt(ld)}</td><td colspan="3">Herd total</td><td>${dg[ld].toFixed(1)} L</td><td></td><td></td></tr>`;ld=r.date;const cowA=A.find(a=>a.tag===r.cow);const mo=r.morn!==null&&r.morn!==undefined?parseFloat(r.morn):null;const ev=r.eve!==null&&r.eve!==undefined?parseFloat(r.eve):null;const tt=(mo||0)+(ev||0);rows+=`<tr><td>${fmt(r.date)}</td><td><button class="lb" onclick="showDetail('${r.cow}')">${r.cow}</button></td><td>${cowA?.name||'—'}</td><td>${mo!==null?mo.toFixed(1)+' L':'<span class="badge badge-partial" style="font-size:10px;">⏳ pending</span>'}</td><td>${ev!==null?ev.toFixed(1)+' L':'<span class="badge badge-partial" style="font-size:10px;">⏳ pending</span>'}</td><td><strong>${tt.toFixed(1)} L</strong></td><td>${r.partial?'<span style="font-size:10px;padding:2px 7px;background:#fff8e0;border:1px solid #e8c840;border-radius:10px;color:#856404;font-weight:600;">Partial</span>':'<span class="badge badge-active" style="font-size:10px;">Complete</span>'}</td><td><button class="btn btn-sm" onclick="editMilk(${r.id})">✏ Edit</button></td></tr>`;});if(!fc&&ld)rows+=`<tr class="total-row"><td>${fmt(ld)}</td><td colspan="3">Herd total</td><td>${dg[ld].toFixed(1)} L</td><td></td><td></td></tr>`;t.innerHTML=rows;}
+function renderMilkSummary(){const t=document.getElementById('milk-summary-table');if(!t)return;const sm=document.getElementById('milk-summary-month')?.value||today().slice(0,7);const recs=M.filter(r=>r.date.startsWith(sm));if(!recs.length){t.innerHTML=`<tr><td colspan="6" class="empty">No milk records for this month.</td></tr>`;return;}const cm={};recs.forEach(r=>{if(!cm[r.cow])cm[r.cow]={total:0,days:0,best:0};const tt=parseFloat(r.morn||0)+parseFloat(r.eve||0);cm[r.cow].total+=tt;cm[r.cow].days++;if(tt>cm[r.cow].best)cm[r.cow].best=tt;});const grand=Object.values(cm).reduce((s,d)=>s+d.total,0);t.innerHTML=Object.entries(cm).sort((a,b)=>b[1].total-a[1].total).map(([tag,d])=>{const c=A.find(a=>a.tag===tag);return`<tr><td><button class="lb" onclick="showDetail('${tag}')">${tag}</button></td><td>${c?.name||'—'}</td><td>${d.days}</td><td><strong>${d.total.toFixed(1)} L</strong></td><td>${(d.total/d.days).toFixed(1)} L</td><td>${d.best.toFixed(1)} L</td></tr>`;}).join('')+`<tr class="total-row"><td colspan="3">Herd total</td><td><strong>${grand.toFixed(1)} L</strong></td><td colspan="2"></td></tr>`;}
+function renderPreg(){
+  const ta=document.getElementById('preg-active-table');
+  const td=document.getElementById('preg-delivered-table');
+  const active=P.filter(p=>p.status!=='Delivered');
+  const delivered=P.filter(p=>p.status==='Delivered');
+  // Active pregnancies table
+  if(ta){
+    if(!active.length){ta.innerHTML=`<tr><td colspan="10" class="empty">No active pregnancy records. Click "+ Add Pregnancy" to start.</td></tr>`;}
+    else ta.innerHTML=active.sort((a,b)=>new Date(a.calving||'9999')-new Date(b.calving||'9999')).map(p=>{
+      const cow=A.find(a=>a.tag===p.cow);
+      const d=du(p.calving);
+      const dc=d===null?'—':d<0?`<span style="color:#aaa">${Math.abs(d)}d ago</span>`:d<=7?`<span class="badge badge-alert">${d}d left</span>`:d<=21?`<span class="badge badge-soon">${d}d left</span>`:`${d}d left`;
+      const statusBadge=p.status==='Pregnant'?`<span class="badge badge-active">Pregnant</span>`:p.status==='Aborted'?`<span class="badge badge-inactive">Aborted</span>`:`<span class="badge badge-inactive">${p.status}</span>`;
+      const curLact=L.find(l=>l.cow===p.cow&&!l.end);
+      const dryDate=curLact?.end?fmt(curLact.end):'—';
+      return `<tr>
+        <td><button class="lb" onclick="showDetail('${p.cow}')">${p.cow}</button>${cow?.name?`<br><span style="font-size:11px;color:#888;">${cow.name}</span>`:''}</td>
+        <td>${fmt(p.insem)}</td>
+        <td>${p.sire||'—'}</td>
+        <td><span style="font-size:11px;">${p.method}</span></td>
+        <td>${fmt(p.calving)}</td>
+        <td>${dc}</td>
+        <td>${dryDate}</td>
+        <td>${statusBadge}</td>
+        <td style="font-size:11px;color:#888;">${p.notes||'—'}</td>
+        <td style="white-space:nowrap;">
+          ${p.status==='Pregnant'?`<button class="btn btn-primary btn-sm" style="font-size:10px;padding:3px 7px;margin-bottom:3px;display:block;" onclick="openDeliveryModal(${p.id})">🐄 Delivery</button>`:''}
+          <div style="display:flex;gap:4px;margin-top:2px;">
+            <button class="btn btn-sm" style="font-size:10px;padding:3px 7px;" onclick="openEditPreg(${p.id})">✏ Edit</button>
+            <button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 7px;" onclick="deletePreg(${p.id})">🗑 Remove</button>
+          </div>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+  // Delivered table
+  if(td){
+    if(!delivered.length){td.innerHTML=`<tr><td colspan="8" class="empty">No delivery records yet.</td></tr>`;}
+    else td.innerHTML=delivered.sort((a,b)=>(b.calvdate||'').localeCompare(a.calvdate||'')).map(p=>{
+      const cow=A.find(a=>a.tag===p.cow);
+      const lact=L.find(l=>l.cow===p.cow&&l.source==='auto'&&l.start===p.calvdate);
+      return `<tr>
+        <td><button class="lb" onclick="showDetail('${p.cow}')">${p.cow}</button>${cow?.name?`<br><span style="font-size:11px;color:#888;">${cow.name}</span>`:''}</td>
+        <td>${fmt(p.insem)}</td>
+        <td><strong>${fmt(p.calvdate)}</strong></td>
+        <td><span class="badge badge-active" style="font-size:10px;">Delivered</span></td>
+        <td>${p.outcome||'—'}</td>
+        <td>${lact?`<span class="badge badge-auto">Auto #${lact.num}</span>`:'—'}</td>
+        <td style="font-size:11px;color:#888;">${p.notes||'—'}</td>
+        <td style="white-space:nowrap;"><div style="display:flex;gap:4px;"><button class="btn btn-sm" style="font-size:10px;padding:3px 7px;" onclick="openEditPreg(${p.id})">✏ Edit</button><button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 7px;" onclick="deletePreg(${p.id})">🗑 Remove</button></div></td>
+      </tr>`;
+    }).join('');
+  }
+}
+function renderLact(){
+  const t=document.getElementById('lact-table');if(!t)return;
+  if(!L.length){t.innerHTML=`<tr><td colspan="12" class="empty">No lactation records yet.</td></tr>`;return;}
+  const daysBetween=(d1,d2)=>{if(!d1||!d2)return null;const diff=Math.round((new Date(d2)-new Date(d1))/(1000*60*60*24));return diff>=0?diff:null;};
+  t.innerHTML=[...L].sort((a,b)=>a.cow.localeCompare(b.cow)||(parseInt(a.num)||0)-(parseInt(b.num)||0)).map(l=>{
+    const cow=A.find(a=>a.tag===l.cow);
+    const isActive=!l.end||!l.dryoff;
+    // Active days = calving → dry-off (or today if still active)
+    const activeDays=l.start?(isActive?daysBetween(l.start,today()):daysBetween(l.start,l.dryoff||l.end)):null;
+    // Dry period = dry-off → next calving
+    const dryDays=l.dryoff&&l.nextcalv?daysBetween(l.dryoff||l.end,l.nextcalv):null;
+    const dryoffDisplay=l.dryoff||l.end;
+    const statusPill=isActive
+      ? `<span class="badge badge-active" style="font-size:10px;">Active</span>`
+      : `<span class="badge badge-dry" style="font-size:10px;">Dry-off ${fmt(dryoffDisplay)}</span>`;
+    const dryPeriodDisplay=dryDays!==null
+      ? `<strong style="color:#0F6E56;">${dryDays}d</strong>`
+      : (dryoffDisplay&&!l.nextcalv?'<span style="color:#aaa;font-size:11px;">awaiting delivery</span>':'—');
+    const actionBtn=isActive
+      ? `<button class="btn btn-sm" style="font-size:11px;background:#fff8e0;border-color:#e8c840;color:#856404;margin-right:4px;" onclick="openDryoffModal(${l.id})">🌾 Record Dry-off</button>`
+      : '';
+    return `<tr>
+      <td><button class="lb" onclick="showDetail('${l.cow}')">${l.cow}</button>${cow?.name?`<br><span style="font-size:10px;color:#888;">${cow.name}</span>`:''}</td>
+      <td style="text-align:center;font-weight:700;">${l.num||'—'}</td>
+      <td>${l.source==='auto'?'<span class="badge badge-auto" style="font-size:9px;">auto</span>':'<span style="font-size:10px;color:#888;">manual</span>'}</td>
+      <td>${fmt(l.start)}<br><span style="font-size:10px;color:#aaa;">${statusPill}</span></td>
+      <td style="text-align:center;">${activeDays!==null?`<strong>${activeDays}d</strong>`+'<br><span style="font-size:10px;color:#888;">'+(isActive?'so far':'active')+'</span>':'—'}</td>
+      <td>${dryoffDisplay?`<strong>${fmt(dryoffDisplay)}</strong><br><span style="font-size:10px;color:#888;">${l.dryReason||''}</span>`:`<span style="color:#aaa;font-size:11px;">not yet dry</span>`}</td>
+      <td style="text-align:center;">${dryPeriodDisplay}</td>
+      <td>${l.nextcalv?fmt(l.nextcalv):'<span style="color:#aaa;font-size:11px;">—</span>'}</td>
+      <td>${l.total?Number(l.total).toLocaleString()+' L':'—'}</td>
+      <td>${l.peak?l.peak+' L':'—'}</td>
+      <td style="font-size:11px;color:#888;">${l.notes||'—'}</td>
+      <td style="white-space:nowrap;">${actionBtn}<div style="display:flex;gap:4px;margin-top:2px;"><button class="btn btn-sm" style="font-size:10px;padding:3px 7px;" onclick="openEditLact(${l.id})">✏ Edit</button><button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 7px;" onclick="deleteLact(${l.id})">🗑 Remove</button></div></td>
+    </tr>`;
+  }).join('');
+}
+function renderHealth(){const t=document.getElementById('health-table');if(!t)return;const fq=(document.getElementById('health-filter')?.value||'').toLowerCase();const ft=document.getElementById('health-type-filter')?.value||'';let list=H.filter(h=>{if(fq&&!h.tag.toLowerCase().includes(fq))return false;if(ft&&h.type!==ft)return false;return true;}).sort((a,b)=>new Date(b.date)-new Date(a.date));if(!list.length){t.innerHTML=`<tr><td colspan="10" class="empty">No health records yet.</td></tr>`;return;}t.innerHTML=list.map(h=>`<tr><td>${fmt(h.date)}</td><td><button class="lb" onclick="showDetail('${h.tag}')">${h.tag}</button></td><td><span class="badge badge-bull">${h.type}</span></td><td>${h.diag||'—'}</td><td>${h.drug||'—'}</td><td>${h.dose||'—'}</td><td>${h.vet||'—'}</td><td>${fmt(h.next)}</td><td>${h.notes||'—'}</td><td style="white-space:nowrap;"><div style="display:flex;gap:4px;"><button class="btn btn-sm" style="font-size:10px;padding:3px 7px;" onclick="openEditHealth(${h.id})">✏ Edit</button><button class="btn btn-danger btn-sm" style="font-size:10px;padding:3px 7px;" onclick="deleteHealth(${h.id})">🗑 Remove</button></div></td></tr>`).join('');}
+function renderLog(){const t=document.getElementById('log-table');if(!t)return;if(!G.length){t.innerHTML=`<tr><td colspan="9" class="empty">No log entries yet.</td></tr>`;return;}t.innerHTML=G.map(l=>`<tr><td>${fmt(l.date)}</td><td>${l.tag}</td><td>${l.name||'—'}</td><td>${tb(l.type)}</td><td><span class="badge ${l.action==='Added'||l.action==='Calved'?'badge-active':'badge-inactive'}">${l.action}</span></td><td>${rb(l.reason)}</td><td><strong style="color:#0F6E56;">${l.loggedBy||'—'}</strong></td><td>${l.donor||'—'}</td><td>${l.notes||'—'}</td></tr>`).join('');}
+function renderDep(){const t=document.getElementById('dep-table');if(!t)return;const dep=A.filter(a=>a.status==='Inactive').sort((a,b)=>(b.deldate||'').localeCompare(a.deldate||''));if(!dep.length){t.innerHTML=`<tr><td colspan="10" class="empty">No departures recorded yet.</td></tr>`;return;}t.innerHTML=dep.map(a=>{let rec='—',price='—',cause='—';if(a.delreason==='Sold'){rec=a.delpurchaser||'—';price=a.delprice?'₹'+Number(a.delprice).toLocaleString():'—';}else if(a.delreason==='Transfer out')rec=a.deldestination||'—';else if(a.delreason==='Donated')rec=a.deldonateto||'—';if(a.delreason?.startsWith('Died'))cause=a.delcause||'—';return`<tr><td>${thumbHtml(a.photo,a.type)}</td><td>${fmt(a.deldate)}</td><td><button class="lb" onclick="showDetail('${a.tag}')">${a.tag}</button></td><td>${a.name||'—'}</td><td>${tb(a.type)}</td><td>${rb(a.delreason)}</td><td>${rec}</td><td>${price}</td><td>${cause}</td><td>${a.delnotes||'—'}</td></tr>`;}).join('');}
+// ---- EDIT ANIMAL ----
+// editingTag and editingPhotoB64 declared at top of script
+
+function editAnimal(tag) {
+  const a = A.find(x => x.tag === tag);
+  if (!a) return;
+  editingTag = tag;
+  editingPhotoB64 = null;
+  document.getElementById('edit-animal-title').textContent = 'Edit — ' + (a.name || tag);
+  document.getElementById('ea-godhanno') && (document.getElementById('ea-godhanno').value = '');
+  document.getElementById('ea-tagslno') && (document.getElementById('ea-tagslno').value = a.tagSlNo || '');
+  const tagEl = document.getElementById('ea-tag');
+  tagEl.value = a.tag;
+  const tagHint = document.getElementById('ea-tag-hint');
+  if(currentRole === 'admin'){
+    tagEl.disabled = false;
+    tagEl.style.background = '';
+    tagEl.style.color = '';
+    tagEl.title = 'Admin: Tag is editable';
+    if(tagHint) tagHint.textContent = '(editable by Admin)';
+  } else {
+    tagEl.disabled = true;
+    tagEl.style.background = '#f5f5f0';
+    tagEl.style.color = '#888';
+    tagEl.title = 'Only Admin can change the Tag';
+    if(tagHint) tagHint.textContent = '(Admin only)';
+  }
+  document.getElementById('ea-name').value = a.name || '';
+  document.getElementById('ea-type').value = a.type || 'Cow';
+  document.getElementById('ea-breed').value = a.breed || 'Gir';
+  const statEl=document.getElementById('ea-status');if(statEl)statEl.value=a.status==='Dry'?'Dry':'Active';
+  document.getElementById('ea-dob').value = a.dob || '';
+  document.getElementById('ea-sex').value = a.sex || 'Female';
+  document.getElementById('ea-sire').value = a.sire || '';
+  document.getElementById('ea-dam').value = a.dam || '';
+  document.getElementById('ea-reason').value = a.reason || 'Born on farm';
+  document.getElementById('ea-adddate').value = a.adddate || '';
+  document.getElementById('ea-donor').value = a.donor || '';
+  document.getElementById('ea-dondate').value = a.dondate || '';
+  document.getElementById('ea-notes').value = a.notes || '';
+  // Show/hide donation fields
+  document.getElementById('edit-donation-fields').style.display = a.reason === 'Donation' ? 'block' : 'none';
+  // Show current photo
+  const cp = document.getElementById('ea-current-photo');
+  if (a.photo) {
+    cp.innerHTML = `<div style="display:flex;align-items:center;gap:10px;padding:8px;background:#f4fbf8;border-radius:8px;border:1px solid #c8ddd6;">
+      <img src="${a.photo}" style="width:52px;height:52px;border-radius:8px;object-fit:cover;border:1px solid #c8ddd6;cursor:pointer;" onclick="openLightbox('${a.photo}',event)">
+      <div style="flex:1;font-size:12px;color:#5a8a78;">Current photo — upload a new one below to replace it</div>
+      <button class="btn btn-sm" style="font-size:11px;color:#c0392b;border-color:#f5b7b1;" onclick="clearEditPhoto()">Remove photo</button>
+    </div>`;
+  } else {
+    cp.innerHTML = '<div style="font-size:12px;color:#9abfb2;margin-bottom:4px;">No photo currently set.</div>';
+  }
+  // Reset upload area
+  document.getElementById('ea-photo-input').value = '';
+  document.getElementById('ea-photo-preview').style.display = 'none';
+  document.getElementById('ea-photo-placeholder').style.display = 'block';
+  openModal('edit-animal-modal');
+}
+
+function editAnimalFromDetail() {
+  const title = document.getElementById('detail-title').textContent;
+  // Extract tag from title (format: "Name — TAG" or just "TAG")
+  const tag = editingDetailTag;
+  closeModal('detail-modal');
+  if (tag) editAnimal(tag);
+}
+
+function toggleEditDonationFields() {
+  document.getElementById('edit-donation-fields').style.display =
+    document.getElementById('ea-reason').value === 'Donation' ? 'block' : 'none';
+}
+
+function previewEditPhoto(input) {
+  const file = input.files[0]; if (!file) return;
+  if (file.size > 2 * 1024 * 1024) { alert('Photo must be under 2MB.'); input.value = ''; return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    editingPhotoB64 = e.target.result;
+    const pv = document.getElementById('ea-photo-preview'), ph = document.getElementById('ea-photo-placeholder');
+    pv.src = editingPhotoB64; pv.style.display = 'block'; ph.style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearEditPhoto() {
+  editingPhotoB64 = ''; // empty string = explicitly cleared
+  document.getElementById('ea-current-photo').innerHTML = '<div style="font-size:12px;color:#c0392b;margin-bottom:4px;">Photo will be removed on save.</div>';
+}
+
+function saveEditAnimal() {
+  const a = A.find(x => x.tag === editingTag);
+  if (!a) { closeModal('edit-animal-modal'); return; }
+  const oldName = a.name;
+  const oldStatus = a.status;
+  a.tagSlNo = document.getElementById('ea-tagslno') ? document.getElementById('ea-tagslno').value.trim() : '';
+  a.name    = document.getElementById('ea-name').value.trim();
+  a.type    = document.getElementById('ea-type').value;
+  a.breed   = document.getElementById('ea-breed').value.trim() || 'Gir';
+  const statEl=document.getElementById('ea-status');if(statEl)a.status=statEl.value;
+  a.dob     = document.getElementById('ea-dob').value;
+  a.sex     = document.getElementById('ea-sex').value;
+  a.sire    = document.getElementById('ea-sire').value.trim();
+  a.dam     = document.getElementById('ea-dam').value.trim();
+  a.reason  = document.getElementById('ea-reason').value;
+  a.adddate = document.getElementById('ea-adddate').value;
+  a.donor   = a.reason === 'Donation' ? document.getElementById('ea-donor').value.trim() : '';
+  a.dondate = a.reason === 'Donation' ? document.getElementById('ea-dondate').value : '';
+  a.notes   = document.getElementById('ea-notes').value.trim();
+  if (editingPhotoB64 !== null) a.photo = editingPhotoB64;
+  const changes=[];
+  if(oldName!==a.name)changes.push(`Name: "${oldName}"→"${a.name}"`);
+  if(oldStatus!==a.status)changes.push(`Status: ${oldStatus}→${a.status}`);
+  G.unshift({ date: today(), tag: a.tag, name: a.name, type: a.type, action: 'Edited', reason: 'GauDhan details updated', loggedBy: currentUser, donor: '', dondate: '', notes: changes.join('; ') });
+  populateCows(); save(); render(); closeModal('edit-animal-modal');
+  editingTag = null; editingPhotoB64 = null;
+}
+
+// ---- GLOBAL SEARCH ----
+function globalSearch(){
+  const q=(document.getElementById('global-search')?.value||'').trim().toLowerCase();
+  if(!q){document.getElementById('global-search-results')?.remove();return;}
+  const results=[];
+  // Search animals
+  A.forEach(a=>{
+    if([a.tag,a.name,a.breed,a.type,a.sire,a.dam].some(f=>(f||'').toLowerCase().includes(q)))
+      results.push({type:'GauDhan',tag:a.tag,title:a.tag+(a.name?' — '+a.name:''),sub:a.type+(a.status?', '+a.status:''),action:`showDetail('${a.tag}')`});
+  });
+  // Search health
+  H.forEach(h=>{
+    if([h.tag,h.diag,h.drug,h.type].some(f=>(f||'').toLowerCase().includes(q))){
+      const a=A.find(x=>x.tag===h.tag);
+      results.push({type:'Health',tag:h.tag,title:h.tag+(a?.name?' — '+a.name:''),sub:h.type+': '+(h.diag||h.drug||''),action:`showTab('health')`});
+    }
+  });
+  // Search log
+  G.forEach(l=>{
+    if([l.tag,l.name,l.reason,l.action].some(f=>(f||'').toLowerCase().includes(q)))
+      results.push({type:'Log',tag:l.tag,title:l.name||l.tag,sub:l.action+' — '+fmt(l.date),action:`showTab('log')`});
+  });
+  // Show results
+  let el=document.getElementById('global-search-results');
+  if(!el){el=document.createElement('div');el.id='global-search-results';el.style.cssText='position:fixed;top:54px;right:8px;background:#fff;border:1px solid #e0e0d8;border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,0.15);min-width:280px;max-width:360px;max-height:60vh;overflow-y:auto;z-index:100;';document.body.appendChild(el);}
+  if(!results.length){el.innerHTML='<div style="padding:14px;font-size:13px;color:#aaa;">No results found.</div>';return;}
+  el.innerHTML='<div style="padding:8px 12px;font-size:11px;font-weight:600;color:#aaa;border-bottom:1px solid #f0f0e8;">'+results.length+' result'+(results.length>1?'s':'')+'</div>'+
+    results.slice(0,12).map(r=>`<div onclick="${r.action};document.getElementById('global-search').value='';document.getElementById('global-search-results')?.remove();" style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f5f5f0;" onmouseover="this.style.background='#f5f5f0'" onmouseout="this.style.background=''">
+      <span style="font-size:10px;font-weight:600;padding:1px 6px;border-radius:10px;background:#E1F5EE;color:#0F6E56;margin-right:6px;">${r.type}</span>
+      <span style="font-size:13px;font-weight:600;">${r.title}</span>
+      <div style="font-size:11px;color:#888;margin-top:2px;">${r.sub}</div>
+    </div>`).join('');
+}
+document.addEventListener('click',e=>{if(!e.target.closest('#global-search')&&!e.target.closest('#global-search-results'))document.getElementById('global-search-results')?.remove();});
+
+// ---- BULK MILK ENTRY ----
+function renderBulkMilk(){
+  const el=document.getElementById('bulk-milk-table');if(!el)return;
+  const cows=A.filter(a=>a.type==='Cow'&&a.status==='Active');
+  const session=document.getElementById('bulk-session')?.value||'both';
+  const date=document.getElementById('bulk-date')?.value||today();
+  if(!cows.length){el.innerHTML='<div style="font-size:13px;color:#aaa;">No active cows on farm.</div>';return;}
+  const showMorn=session!=='evening', showEve=session!=='morning';
+  let html='<div class="table-wrap"><table><thead><tr><th>Tag</th><th>Name</th>';
+  if(showMorn)html+='<th>Morning (L)</th>';
+  if(showEve)html+='<th>Evening (L)</th>';
+  html+='<th>Existing</th></tr></thead><tbody>';
+  cows.forEach(c=>{
+    const ex=M.find(r=>r.cow===c.tag&&r.date===date);
+    const exMorn=ex&&ex.morn!==null&&ex.morn!==undefined?ex.morn:'—';
+    const exEve=ex&&ex.eve!==null&&ex.eve!==undefined?ex.eve:'—';
+    html+=`<tr><td style="font-size:12px;font-weight:600;">${c.tag}</td><td style="font-size:12px;">${c.name||'—'}</td>`;
+    if(showMorn)html+=`<td><input type="number" min="0" step="1" placeholder="0" style="padding:5px 8px;font-size:13px;width:80px;" id="bm-morn-${c.tag}"></td>`;
+    if(showEve)html+=`<td><input type="number" min="0" step="1" placeholder="0" style="padding:5px 8px;font-size:13px;width:80px;" id="bm-eve-${c.tag}"></td>`;
+    html+=`<td style="font-size:11px;color:#888;">☀${exMorn} 🌙${exEve}</td></tr>`;
+  });
+  html+='</tbody></table></div>';
+  el.innerHTML=html;
+}
+function saveBulkMilk(){
+  const cows=A.filter(a=>a.type==='Cow'&&a.status==='Active');
+  const date=document.getElementById('bulk-date')?.value||today();
+  const session=document.getElementById('bulk-session')?.value||'both';
+  let saved=0;
+  cows.forEach(c=>{
+    const mornEl=document.getElementById('bm-morn-'+c.tag);
+    const eveEl=document.getElementById('bm-eve-'+c.tag);
+    const mo=mornEl&&mornEl.value!==''?parseInt(mornEl.value):null;
+    const ev=eveEl&&eveEl.value!==''?parseInt(eveEl.value):null;
+    if(mo===null&&ev===null)return;
+    const idx=M.findIndex(r=>r.cow===c.tag&&r.date===date);
+    if(idx>=0){
+      if(session==='morning'||session==='both'){if(mo!==null)M[idx].morn=mo;}
+      if(session==='evening'||session==='both'){if(ev!==null)M[idx].eve=ev;}
+      M[idx].partial=M[idx].morn===null||M[idx].eve===null;
+    } else {
+      const newId=Date.now()+saved; // unique integer ID per row
+      const nr={id:newId,cow:c.tag,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};
+      nr.partial=nr.morn===null||nr.eve===null;
+      M.push(nr);
+    }
+    saved++;
+  });
+  if(saved===0){
+    const msg=document.getElementById('bulk-save-msg');
+    if(msg)msg.textContent='No values entered';
+    setTimeout(()=>{if(msg)msg.textContent='';},2000);
+    return;
+  }
+  // Save locally first
+  saveLocal();
+  const msg=document.getElementById('bulk-save-msg');
+  if(msg){msg.style.color='#f0a500';msg.textContent='⟳ Saving '+saved+' records...';}
+  renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();renderBulkMilk();
+  // Direct Supabase save
+  getSBAsync(5000).then(sb=>{
+    if(!sb){
+      if(msg){msg.style.color='#888';msg.textContent='✓ Saved locally (offline)';}
+      setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },3000);
+      return;
+    }
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-60);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    const recentMilk=M.filter(m=>m.date>=cutoffStr);
+    const qurl=SB_URL+'/rest/v1/gd_milk?on_conflict=id';
+    fetch(qurl,{
+      method:'POST',
+      headers:{
+        'apikey':SB_KEY,
+        'Authorization':'Bearer '+SB_KEY,
+        'Content-Type':'application/json',
+        'Prefer':'resolution=merge-duplicates,return=minimal'
+      },
+      body:JSON.stringify(recentMilk.map(m=>({id:m.id,cow:m.cow,date:m.date,morn:m.morn,eve:m.eve,partial:m.partial||false})))
+    }).then(async r=>{
+      if(r.ok){
+        if(msg){msg.style.color='#1D9E75';msg.textContent='✓ Saved '+saved+' cows to cloud';}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },3000);
+        setSyncStatus('✓ Synced','#1D9E75');
+        setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+      } else {
+        const e=await r.json().catch(()=>({message:r.statusText}));
+        if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Error: '+JSON.stringify(e);}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },8000);
+      }
+    }).catch(e=>{
+      if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Network error: '+e.message;}
+      setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },5000);
+    });
+  });
+}
+
+function exportXL(type){
+  if(!window.XLSX){alert('Excel library still loading — please try again in a moment.');return;}
+  let rows=[],sheetName='',fn='';
+  if(type==='animals'){
+    fn='GiRDHAAM_Animals.xlsx';sheetName='Animals';
+    rows=[['Tag Sl.No','Tag','Name','Type','Breed','DOB','Sex','Father','Mother','Lact #','Reason','Donor','Donation Date','Added On','Status','Notes']];
+    A.filter(onFarm).forEach(a=>rows.push([a.tagSlNo||'',a.tag,a.name,a.type,a.breed,a.dob,a.sex,a.sire,a.dam,a.lactnum||'',a.reason,a.donor||'',a.dondate||'',a.adddate,a.status,a.notes]));
+  } else if(type==='pregnancy'){
+    fn='GiRDHAAM_Pregnancy.xlsx';sheetName='Pregnancy';
+    rows=[['Cow Tag','Insem. Date','Sire','Method','Exp. Calving','Actual Calving','Status','Calf Tag','Notes']];
+    P.forEach(p=>rows.push([p.cow,p.insem,p.sire,p.method,p.calving,p.calvdate||'',p.status,p.outcome||'',p.notes||'']));
+  } else if(type==='lactation'){
+    fn='GiRDHAAM_Lactation.xlsx';sheetName='Lactation';
+    rows=[['Cow Tag','Lact #','Source','Start','End','Total (L)','Peak (L)','Notes']];
+    L.forEach(l=>rows.push([l.cow,l.num,l.source==='auto'?'Auto':'Manual',l.start,l.end||'',l.total||'',l.peak||'',l.notes||'']));
+  } else if(type==='health'){
+    fn='GiRDHAAM_Health.xlsx';sheetName='Health Records';
+    rows=[['Date','Tag','Record Type','Diagnosis','Drug / Treatment','Dosage','Vet','Next Due','Notes']];
+    H.forEach(h=>rows.push([h.date,h.tag,h.type,h.diag||'',h.drug||'',h.dose||'',h.vet||'',h.next||'',h.notes||'']));
+  } else if(type==='log'){
+    fn='GiRDHAAM_ActivityLog.xlsx';sheetName='Activity Log';
+    rows=[['Date','Tag','Name','Type','Action','Reason','Logged By','Donor / Purchaser','Notes']];
+    G.forEach(l=>rows.push([l.date,l.tag,l.name||'',l.type||'',l.action,l.reason||'',l.loggedBy||'',l.donor||'',l.notes||'']));
+  } else if(type==='departures'){
+    fn='GiRDHAAM_Departures.xlsx';sheetName='Departures';
+    rows=[['Date','Tag','Name','Type','Reason','Purchaser / Recipient','Price (Rs.)','Cause of Death','Notes']];
+    A.filter(a=>a.status==='Inactive').forEach(a=>rows.push([a.deldate||'',a.tag,a.name||'',a.type,a.delreason||'',a.delpurchaser||a.deldonateto||'',a.delprice||'',a.delcause||'',a.delnotes||'']));
+  }
+  const ws=XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols']=rows[0].map((_,i)=>({wch:Math.max(12,...rows.map(r=>String(r[i]||'').length))+2}));
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,sheetName);
+  const meta=XLSX.utils.aoa_to_sheet([['GiRDHAAM — GauDhan'],['Gauvansh Management System'],[''],['Exported on',new Date().toLocaleDateString('en-IN')],['Module',sheetName],['Total records',rows.length-1]]);
+  XLSX.utils.book_append_sheet(wb,meta,'Info');
+  XLSX.writeFile(wb,fn);
+}
+
+// Fetch logo on page load — runs after all functions defined
+setTimeout(fetchLogoOnLoad, 500);
+</script>
+</body>
+</html>
