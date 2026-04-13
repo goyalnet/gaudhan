@@ -376,7 +376,7 @@ window.onerror=function(msg,src,line,col,err){
           <div id="dash-logo-preview" style="width:42px;height:42px;border-radius:50%;background:#E1F5EE;display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;flex-shrink:0;">🐄</div>
           <div style="flex:1;font-size:12px;color:#5a8a78;">Farm logo — shown on login page and topbar</div>
           <label style="cursor:pointer;display:inline-block;z-index:1;position:relative;">
-            <input type="file" accept="image/*" style="display:none;" onchange="uploadFarmLogo(this);updateDashLogoPreview(this);">
+            <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="uploadFarmLogo(this);updateDashLogoPreview(this);">
             <span class="btn btn-sm" style="background:#1D9E75;color:#fff;border-color:#1D9E75;display:inline-block;">📷 Upload Logo</span>
           </label>
         </div>
@@ -683,12 +683,25 @@ window.onerror=function(msg,src,line,col,err){
   </div>
   <div class="section-divider">
     <div class="section-divider-label">GauDhan photo (optional)</div>
-    <div class="photo-upload-area" onclick="document.getElementById('a-photo-input').click()">
-      <input type="file" id="a-photo-input" accept="image/*" onchange="previewPhoto(this)">
-      <img id="a-photo-preview" class="photo-preview" style="display:none;">
-      <div id="a-photo-placeholder">
-        <div style="font-size:32px;margin-bottom:6px;">📷</div>
-        <div class="photo-upload-label">Tap to upload photo<br><span style="font-size:11px;color:#bbb;">JPG, PNG — max 2MB</span></div>
+    <div style="margin-top:4px;">
+      <img id="a-photo-preview" class="photo-preview" style="display:none;margin:0 auto 8px;display:block;">
+      <div id="a-photo-placeholder" style="display:flex;gap:8px;justify-content:center;">
+        <!-- Camera — opens camera directly on mobile -->
+        <label style="cursor:pointer;flex:1;">
+          <input type="file" id="a-photo-input" accept="image/*" capture="environment" onchange="previewPhoto(this)" style="display:none;">
+          <div class="photo-upload-area" style="padding:1rem;margin:0;">
+            <div style="font-size:28px;">📸</div>
+            <div class="photo-upload-label">Take photo</div>
+          </div>
+        </label>
+        <!-- Gallery — opens photo gallery -->
+        <label style="cursor:pointer;flex:1;">
+          <input type="file" id="a-photo-gallery" accept="image/*" onchange="previewPhoto(this)" style="display:none;">
+          <div class="photo-upload-area" style="padding:1rem;margin:0;">
+            <div style="font-size:28px;">🖼️</div>
+            <div class="photo-upload-label">From gallery</div>
+          </div>
+        </label>
       </div>
     </div>
   </div>
@@ -721,10 +734,24 @@ window.onerror=function(msg,src,line,col,err){
   <div class="section-divider">
     <div class="section-divider-label">GauDhan photo</div>
     <div id="ea-current-photo" style="margin-bottom:8px;"></div>
-    <div class="photo-upload-area" onclick="document.getElementById('ea-photo-input').click()">
-      <input type="file" id="ea-photo-input" accept="image/*" onchange="previewEditPhoto(this)">
-      <img id="ea-photo-preview" class="photo-preview" style="display:none;">
-      <div id="ea-photo-placeholder"><div style="font-size:28px;margin-bottom:4px;">📷</div><div class="photo-upload-label">Upload new photo to replace<br><span style="font-size:11px;color:#bbb;">JPG, PNG — max 2MB</span></div></div>
+    <div style="margin-top:4px;">
+      <img id="ea-photo-preview" class="photo-preview" style="display:none;margin:0 auto 8px;">
+      <div id="ea-photo-placeholder" style="display:flex;gap:8px;justify-content:center;">
+        <label style="cursor:pointer;flex:1;">
+          <input type="file" id="ea-photo-input" accept="image/*" capture="environment" onchange="previewEditPhoto(this)" style="display:none;">
+          <div class="photo-upload-area" style="padding:1rem;margin:0;">
+            <div style="font-size:28px;">📸</div>
+            <div class="photo-upload-label">Take photo</div>
+          </div>
+        </label>
+        <label style="cursor:pointer;flex:1;">
+          <input type="file" id="ea-photo-gallery" accept="image/*" onchange="previewEditPhoto(this)" style="display:none;">
+          <div class="photo-upload-area" style="padding:1rem;margin:0;">
+            <div style="font-size:28px;">🖼️</div>
+            <div class="photo-upload-label">From gallery</div>
+          </div>
+        </label>
+      </div>
     </div>
   </div>
   <div class="fg" style="margin-top:12px;"><label>Notes</label><textarea id="ea-notes"></textarea></div>
@@ -1865,7 +1892,7 @@ function exportMilkExcel(){
 }
 
 // ---- GODHAN CRUD ----
-function addAnimal(){const tag=v('a-tag');if(!tag){alert('Tag required.');return;}if(A.find(a=>a.tag===tag)){alert('Tag already exists.');return;}const type=v('a-type'),reason=v('a-reason'),donor=v('a-donor'),dondate=v('a-dondate'),lactnum=v('a-lactnum');if(reason==='Donation'&&!donor){alert('Donor name required.');return;}if(reason==='Donation'&&!dondate){alert('Donation date required.');return;}const animal={tagSlNo:v('a-tagslno'),tag,name:v('a-name'),type,breed:v('a-breed')||'Gir',dob:v('a-dob'),sex:v('a-sex'),sire:v('a-sire'),dam:v('a-dam'),reason,adddate:v('a-adddate')||today(),notes:v('a-notes'),status:'Active',lactnum:lactnum||'',donor:reason==='Donation'?donor:'',dondate:reason==='Donation'?dondate:'',photo:pendingPhotoB64||''};A.push(animal);if(type==='Cow'&&lactnum)L.push({cow:tag,num:lactnum,start:v('a-lactstart'),end:'',total:v('a-lacttotal'),peak:v('a-lactpeak'),notes:'At addition',source:'manual',id:Date.now()});G.unshift({date:animal.adddate,tag,name:animal.name,type,action:'Added',reason,loggedBy:currentUser,donor:animal.donor,dondate:animal.dondate,notes:animal.notes});populateCows();save();render();closeModal('animal-modal');['a-tagslno','a-tag','a-name','a-sire','a-dam','a-notes','a-lactnum','a-lacttotal','a-lactpeak','a-donor'].forEach(id=>document.getElementById(id).value='');['a-lactstart','a-dondate','a-dob','a-adddate'].forEach(id=>document.getElementById(id).value='');document.getElementById('a-breed').value='Gir';document.getElementById('a-reason').value='Born on farm';document.getElementById('donation-fields').style.display='none';document.getElementById('a-photo-input').value='';document.getElementById('a-photo-preview').style.display='none';document.getElementById('a-photo-placeholder').style.display='block';pendingPhotoB64='';}
+function addAnimal(){const tag=v('a-tag');if(!tag){alert('Tag required.');return;}if(A.find(a=>a.tag===tag)){alert('Tag already exists.');return;}const type=v('a-type'),reason=v('a-reason'),donor=v('a-donor'),dondate=v('a-dondate'),lactnum=v('a-lactnum');if(reason==='Donation'&&!donor){alert('Donor name required.');return;}if(reason==='Donation'&&!dondate){alert('Donation date required.');return;}const animal={tagSlNo:v('a-tagslno'),tag,name:v('a-name'),type,breed:v('a-breed')||'Gir',dob:v('a-dob'),sex:v('a-sex'),sire:v('a-sire'),dam:v('a-dam'),reason,adddate:v('a-adddate')||today(),notes:v('a-notes'),status:'Active',lactnum:lactnum||'',donor:reason==='Donation'?donor:'',dondate:reason==='Donation'?dondate:'',photo:pendingPhotoB64||''};A.push(animal);if(type==='Cow'&&lactnum)L.push({cow:tag,num:lactnum,start:v('a-lactstart'),end:'',total:v('a-lacttotal'),peak:v('a-lactpeak'),notes:'At addition',source:'manual',id:Date.now()});G.unshift({date:animal.adddate,tag,name:animal.name,type,action:'Added',reason,loggedBy:currentUser,donor:animal.donor,dondate:animal.dondate,notes:animal.notes});populateCows();save();render();closeModal('animal-modal');['a-tagslno','a-tag','a-name','a-sire','a-dam','a-notes','a-lactnum','a-lacttotal','a-lactpeak','a-donor'].forEach(id=>document.getElementById(id).value='');['a-lactstart','a-dondate','a-dob','a-adddate'].forEach(id=>document.getElementById(id).value='');document.getElementById('a-breed').value='Gir';document.getElementById('a-reason').value='Born on farm';document.getElementById('donation-fields').style.display='none';document.getElementById('a-photo-input').value='';if(document.getElementById('a-photo-gallery'))document.getElementById('a-photo-gallery').value='';document.getElementById('a-photo-preview').style.display='none';document.getElementById('a-photo-placeholder').style.display='block';pendingPhotoB64='';}
 function deleteAnimal(tag){
   const a=A.find(x=>x.tag===tag);
   if(!confirm(`Remove ${a?.name||tag} from farm? This will move them to Departures.`))return;
