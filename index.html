@@ -1259,11 +1259,45 @@ function save(){
   clearTimeout(window._syncTimer);
   window._syncTimer=setTimeout(syncToCloud,800);
 }
-async function saveMilkNow(){
-  // Save milk immediately — no debounce — critical for data integrity
+function saveMilkNow(){
+  // Save locally first
   saveLocal();
-  clearTimeout(window._syncTimer);
-  await syncToCloud();
+  // Show saving indicator
+  const msg=document.getElementById('m-save-msg');
+  if(msg)msg.textContent='⟳ Saving to cloud…';
+  // Direct immediate Supabase save — no debounce
+  getSBAsync(5000).then(sb=>{
+    if(!sb){
+      if(msg)msg.textContent='✓ Saved locally (offline)';
+      setTimeout(()=>{if(msg)msg.textContent='';},3000);
+      return;
+    }
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-60);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    const recentMilk=M.filter(m=>m.date>=cutoffStr);
+    if(!recentMilk.length){
+      if(msg)msg.textContent='✓ Saved';
+      setTimeout(()=>{if(msg)msg.textContent='';},2000);
+      return;
+    }
+    sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id'})
+    .then(({error})=>{
+      if(error){
+        console.warn('Milk save error:',error);
+        if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Cloud save failed — '+error.message;}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },5000);
+      } else {
+        if(msg){msg.style.color='#1D9E75';msg.textContent='✓ Saved to cloud';}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },3000);
+        setSyncStatus('✓ Synced','#1D9E75');
+        setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+      }
+    }).catch(err=>{
+      console.warn('Milk save catch:',err);
+      if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Error: '+err.message;}
+      setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },5000);
+    });
+  });
 }
 
 function loadApp(){
