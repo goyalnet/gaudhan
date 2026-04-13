@@ -49,17 +49,30 @@ window.supabase={
           }).catch(reject);
         },
         upsert:async function(rows,opts){
-          // Use POST with Prefer: resolution=merge-duplicates
           const conflict=opts&&opts.onConflict?opts.onConflict:'id';
-          const hdrs={...h,'Prefer':'resolution=merge-duplicates,return=minimal','on-conflict':conflict};
+          const rowArr=Array.isArray(rows)?rows:[rows];
           try{
             const r=await fetch(url+'/rest/v1/'+this._table,{
-              method:'POST',headers:hdrs,
-              body:JSON.stringify(Array.isArray(rows)?rows:[rows])
+              method:'POST',
+              headers:{
+                'apikey':key,
+                'Authorization':'Bearer '+key,
+                'Content-Type':'application/json',
+                'Prefer':'resolution=merge-duplicates,return=minimal',
+                'on-conflict':conflict
+              },
+              body:JSON.stringify(rowArr)
             });
-            if(!r.ok){const e=await r.json();return{data:null,error:e};}
+            if(!r.ok){
+              let e;try{e=await r.json();}catch(ex){e={message:r.statusText,status:r.status};}
+              console.warn('Upsert '+this._table+' error:',r.status,JSON.stringify(e));
+              return{data:null,error:e};
+            }
             return{data:null,error:null};
-          }catch(e){return{data:null,error:{message:e.message}};}
+          }catch(e){
+            console.warn('Upsert fetch error:',e.message);
+            return{data:null,error:{message:e.message}};
+          }
         },
         insert:async function(rows){
           const hdrs={...h,'Prefer':'return=representation'};
