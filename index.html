@@ -2345,11 +2345,11 @@ function renderBulkMilk(){
   html+='<th>Existing</th></tr></thead><tbody>';
   cows.forEach(c=>{
     const ex=M.find(r=>r.cow===c.tag&&r.date===date);
-    const exMorn=ex&&ex.morn!==null&&ex.morn!==undefined?ex.morn.toFixed(1):'—';
-    const exEve=ex&&ex.eve!==null&&ex.eve!==undefined?ex.eve.toFixed(1):'—';
+    const exMorn=ex&&ex.morn!==null&&ex.morn!==undefined?ex.morn:'—';
+    const exEve=ex&&ex.eve!==null&&ex.eve!==undefined?ex.eve:'—';
     html+=`<tr><td style="font-size:12px;font-weight:600;">${c.tag}</td><td style="font-size:12px;">${c.name||'—'}</td>`;
-    if(showMorn)html+=`<td><input type="number" min="0" step="0.1" placeholder="0.0" style="padding:5px 8px;font-size:13px;width:90px;" id="bm-morn-${c.tag}"></td>`;
-    if(showEve)html+=`<td><input type="number" min="0" step="0.1" placeholder="0.0" style="padding:5px 8px;font-size:13px;width:90px;" id="bm-eve-${c.tag}"></td>`;
+    if(showMorn)html+=`<td><input type="number" min="0" step="1" placeholder="0" style="padding:5px 8px;font-size:13px;width:80px;" id="bm-morn-${c.tag}"></td>`;
+    if(showEve)html+=`<td><input type="number" min="0" step="1" placeholder="0" style="padding:5px 8px;font-size:13px;width:80px;" id="bm-eve-${c.tag}"></td>`;
     html+=`<td style="font-size:11px;color:#888;">☀${exMorn} 🌙${exEve}</td></tr>`;
   });
   html+='</tbody></table></div>';
@@ -2363,25 +2363,69 @@ function saveBulkMilk(){
   cows.forEach(c=>{
     const mornEl=document.getElementById('bm-morn-'+c.tag);
     const eveEl=document.getElementById('bm-eve-'+c.tag);
-    const mo=mornEl&&mornEl.value!==''?parseFloat(mornEl.value):null;
-    const ev=eveEl&&eveEl.value!==''?parseFloat(eveEl.value):null;
-    if(mo===null&&ev===null)return; // skip blank rows
+    const mo=mornEl&&mornEl.value!==''?parseInt(mornEl.value):null;
+    const ev=eveEl&&eveEl.value!==''?parseInt(eveEl.value):null;
+    if(mo===null&&ev===null)return;
     const idx=M.findIndex(r=>r.cow===c.tag&&r.date===date);
     if(idx>=0){
       if(session==='morning'||session==='both'){if(mo!==null)M[idx].morn=mo;}
       if(session==='evening'||session==='both'){if(ev!==null)M[idx].eve=ev;}
       M[idx].partial=M[idx].morn===null||M[idx].eve===null;
     } else {
-      const nr={id:Date.now()+Math.floor(Math.random()*1000),cow:c.tag,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};
+      const newId=Date.now()+saved; // unique integer ID per row
+      const nr={id:newId,cow:c.tag,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};
       nr.partial=nr.morn===null||nr.eve===null;
       M.push(nr);
     }
     saved++;
   });
-  saveMilkNow();renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();renderBulkMilk();
+  if(saved===0){
+    const msg=document.getElementById('bulk-save-msg');
+    if(msg)msg.textContent='No values entered';
+    setTimeout(()=>{if(msg)msg.textContent='';},2000);
+    return;
+  }
+  // Save locally first
+  saveLocal();
   const msg=document.getElementById('bulk-save-msg');
-  msg.textContent=saved>0?`✓ Saved ${saved} cow${saved>1?'s':''}`:' No values entered';
-  setTimeout(()=>msg.textContent='',3000);
+  if(msg){msg.style.color='#f0a500';msg.textContent='⟳ Saving '+saved+' records...';}
+  renderMilk();renderMilkSummary();renderMilkMetrics();renderOvMilk();renderDailyReport();renderBulkMilk();
+  // Direct Supabase save
+  getSBAsync(5000).then(sb=>{
+    if(!sb){
+      if(msg){msg.style.color='#888';msg.textContent='✓ Saved locally (offline)';}
+      setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },3000);
+      return;
+    }
+    const cutoff=new Date();cutoff.setDate(cutoff.getDate()-60);
+    const cutoffStr=cutoff.toISOString().slice(0,10);
+    const recentMilk=M.filter(m=>m.date>=cutoffStr);
+    const qurl=SB_URL+'/rest/v1/gd_milk?on_conflict=id';
+    fetch(qurl,{
+      method:'POST',
+      headers:{
+        'apikey':SB_KEY,
+        'Authorization':'Bearer '+SB_KEY,
+        'Content-Type':'application/json',
+        'Prefer':'resolution=merge-duplicates,return=minimal'
+      },
+      body:JSON.stringify(recentMilk.map(m=>({id:m.id,cow:m.cow,date:m.date,morn:m.morn,eve:m.eve,partial:m.partial||false})))
+    }).then(async r=>{
+      if(r.ok){
+        if(msg){msg.style.color='#1D9E75';msg.textContent='✓ Saved '+saved+' cows to cloud';}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },3000);
+        setSyncStatus('✓ Synced','#1D9E75');
+        setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+      } else {
+        const e=await r.json().catch(()=>({message:r.statusText}));
+        if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Error: '+JSON.stringify(e);}
+        setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },8000);
+      }
+    }).catch(e=>{
+      if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Network error: '+e.message;}
+      setTimeout(()=>{if(msg){msg.textContent='';msg.style.color='';} },5000);
+    });
+  });
 }
 
 function exportXL(type){
