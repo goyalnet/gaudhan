@@ -1,4 +1,3 @@
-<!-- GauDhan v3.0 INLINE-CLIENT 20260413-1755 -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -1353,8 +1352,6 @@ function saveMilkNow(){
     }
     sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id',ignoreDuplicates:false})
     .then(({data,error})=>{
-      console.log('Milk upsert result — data:',data,'error:',error);
-      console.log('Records sent:',JSON.stringify(recentMilk.map(milkToDb)));
       if(error){
         console.warn('Milk save error:',error);
         if(msg){msg.style.color='#e74c3c';msg.textContent='⚠ Error: '+error.message+' (code:'+error.code+')';}
