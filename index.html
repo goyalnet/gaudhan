@@ -8,18 +8,18 @@
 <script>
 // Load SheetJS asynchronously
 (function(){var s=document.createElement('script');s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';s.async=true;document.head.appendChild(s);})();
-// Load Supabase — try unpkg first, fallback to jsdelivr
+// Load Supabase — pinned stable version from cdnjs
 (function(){
   var s=document.createElement('script');
-  s.src='https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js';
+  s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.39.3/dist/umd/supabase.js';
   s.async=true;
-  s.onload=function(){window._sbReady=true;};
+  s.onload=function(){window._sbReady=true;console.log('Supabase loaded OK');};
   s.onerror=function(){
-    // fallback CDN
+    console.warn('Primary Supabase CDN failed, trying fallback...');
     var s2=document.createElement('script');
-    s2.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js';
+    s2.src='https://unpkg.com/@supabase/supabase-js@2.39.3/dist/umd/supabase.js';
     s2.async=true;
-    s2.onload=function(){window._sbReady=true;};
+    s2.onload=function(){window._sbReady=true;console.log('Supabase fallback loaded OK');};
     document.head.appendChild(s2);
   };
   document.head.appendChild(s);
@@ -1192,7 +1192,7 @@ async function syncToCloud(){
   const sb=await getSBAsync();if(!sb){setSyncStatus('● Offline','#e88');return;}
   setSyncStatus('⟳ Syncing…','#f0a500');
   try{
-    await sb.from('gd_animals').upsert(A.map(animalToDb),{onConflict:'tag'});
+    await sb.from('gd_animals').upsert(A.map(animalToDb),{onConflict:'tag',ignoreDuplicates:false});
     // Milk — only sync last 60 days to avoid timeout
     const cutoff=new Date();cutoff.setDate(cutoff.getDate()-60);
     const cutoffStr=cutoff.toISOString().slice(0,10);
@@ -1201,9 +1201,9 @@ async function syncToCloud(){
       const {error:milkErr}=await sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id'});
       if(milkErr)console.warn('Milk sync error:',milkErr);
     }
-    if(P.length)await sb.from('gd_pregnancy').upsert(P.map(pregToDb),{onConflict:'id'});
-    if(L.length)await sb.from('gd_lactation').upsert(L.map(lactToDb),{onConflict:'id'});
-    if(H.length)await sb.from('gd_health').upsert(H.map(healthToDb),{onConflict:'id'});
+    if(P.length)await sb.from('gd_pregnancy').upsert(P.map(pregToDb),{onConflict:'id',ignoreDuplicates:false});
+    if(L.length)await sb.from('gd_lactation').upsert(L.map(lactToDb),{onConflict:'id',ignoreDuplicates:false});
+    if(H.length)await sb.from('gd_health').upsert(H.map(healthToDb),{onConflict:'id',ignoreDuplicates:false});
     if(G.length){await sb.from('gd_log').insert(G.slice(0,3).map(logToDb)).select();}
     setSyncStatus('✓ Synced','#1D9E75');
     setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
@@ -1283,7 +1283,7 @@ function saveMilkNow(){
       setTimeout(()=>{if(msg)msg.textContent='';},2000);
       return;
     }
-    sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id'})
+    sb.from('gd_milk').upsert(recentMilk.map(milkToDb),{onConflict:'id',ignoreDuplicates:false})
     .then(({data,error})=>{
       console.log('Milk upsert result — data:',data,'error:',error);
       console.log('Records sent:',JSON.stringify(recentMilk.map(milkToDb)));
