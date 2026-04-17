@@ -292,8 +292,8 @@ window.onerror=function(msg,src,line,col,err){
 <div id="login-page" class="login-page">
   <div class="login-card">
     <!-- Farm name — prominent and separate -->
-    <div style="font-size:22px;font-weight:800;color:#0F6E56;letter-spacing:3px;text-transform:uppercase;margin-bottom:2px;">GiRDHAAM</div>
-    <div style="font-size:11px;color:#9abfb2;letter-spacing:1px;font-weight:500;margin-bottom:14px;">Gau Seva &nbsp;·&nbsp; Gau Samridhi</div>
+    <div id="login-org-name" style="font-size:22px;font-weight:800;color:#0F6E56;letter-spacing:3px;text-transform:uppercase;margin-bottom:2px;">GiRDHAAM</div>
+    <div id="login-org-tagline" style="font-size:11px;color:#9abfb2;letter-spacing:1px;font-weight:500;margin-bottom:14px;">Gau Seva · Gau Samridhi</div>
 
     <!-- Divider -->
     <div style="width:40px;height:2px;background:linear-gradient(90deg,#c8ddd6,#1D9E75,#c8ddd6);border-radius:2px;margin:0 auto 14px;"></div>
@@ -303,8 +303,8 @@ window.onerror=function(msg,src,line,col,err){
       <img id="login-logo-img" src="" alt="" style="display:none;width:80px;height:80px;border-radius:50%;object-fit:cover;">
       <span id="login-logo-emoji">🐄</span>
     </div>
-    <div class="login-farm-name" style="margin-top:10px;">GauDhan</div>
-    <div class="login-tagline">Gauvansh Management System</div>
+    <div class="login-farm-name" id="login-farm-name-el" style="margin-top:10px;">GauDhan</div>
+    <div class="login-tagline" id="login-tagline-el">Gauvansh Management System</div>
     <div class="login-divider"></div>
     <div class="login-subtitle">Login</div>
     <div class="login-form">
@@ -333,7 +333,7 @@ window.onerror=function(msg,src,line,col,err){
     <div class="topbar-brand">
       <div class="topbar-logo" id="topbar-logo-wrap"><img id="topbar-logo-img" src="" alt="" style="display:none;width:38px;height:38px;border-radius:50%;object-fit:cover;"><span id="topbar-logo-emoji">🐄</span></div>
       <div>
-        <div class="topbar-farm">GiRDHAAM</div>
+        <div class="topbar-farm" id="topbar-farm-name">GiRDHAAM</div>
         <div class="topbar-app">GauDhan &nbsp;·&nbsp; Gauvansh Management System</div>
       </div>
     </div>
@@ -379,6 +379,7 @@ window.onerror=function(msg,src,line,col,err){
             <input type="file" accept="image/*" capture="environment" style="display:none;" onchange="uploadFarmLogo(this);updateDashLogoPreview(this);">
             <span class="btn btn-sm" style="background:#1D9E75;color:#fff;border-color:#1D9E75;display:inline-block;">📷 Upload Logo</span>
           </label>
+          <button class="btn btn-sm" style="background:#fff;border-color:#1D9E75;color:#0F6E56;" onclick="openModal('farm-settings-modal')">✏ Farm details</button>
         </div>
         <div style="border-top:1px dashed #c8ddd6;padding-top:10px;margin-top:10px;font-size:12px;color:#666;">
           If you cleared Supabase data but old data still shows — tap below to clear the local device cache and reload fresh from Supabase.
@@ -910,6 +911,22 @@ window.onerror=function(msg,src,line,col,err){
 </div></div>
 
 <!-- ADD USER MODAL -->
+<!-- FARM SETTINGS MODAL -->
+<div class="modal-bg" id="farm-settings-modal"><div class="modal" style="max-width:460px;">
+  <h3>✏ Farm Details</h3>
+  <div class="info-banner" style="margin-bottom:14px;">Changes are saved to Supabase and appear on all devices immediately.</div>
+  <div class="form-grid">
+    <div class="fg"><label>Farm / Organisation name *</label><input id="fs-name" placeholder="e.g. GiRDHAAM"></div>
+    <div class="fg"><label>Tagline</label><input id="fs-tagline" placeholder="e.g. Gau Seva · Gau Samridhi"></div>
+    <div class="fg"><label>App name (shown below logo)</label><input id="fs-appname" placeholder="e.g. GauDhan"></div>
+    <div class="fg"><label>App subtitle</label><input id="fs-subtitle" placeholder="e.g. Gauvansh Management System"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn" onclick="closeModal('farm-settings-modal')">Cancel</button>
+    <button class="btn btn-primary" onclick="saveFarmSettings()">Save &amp; Apply</button>
+  </div>
+</div></div>
+
 <div class="modal-bg" id="add-user-modal"><div class="modal" style="max-width:420px;">
   <h3>Add New User</h3>
   <div class="form-grid">
@@ -1028,91 +1045,44 @@ function uploadFarmLogo(input){
     const b64=e.target.result;
     applyFarmLogo(b64);
     try{localStorage.setItem('goudhan-logo',b64);}catch(err){}
-    // Save to Supabase as backup
-    const sb=await getSBAsync(3000);
-    if(sb){try{await sb.from('gd_settings').upsert({key:'farm_logo',value:b64,updated_at:new Date().toISOString()},{onConflict:'key'});}catch(err){}}
-    // Show download button — do NOT auto-download
-    showLogoDownloadBtn(b64);
+    setSyncStatus('⟳ Saving logo…','#f0a500');
+    try{
+      const r=await fetch(SB_URL+'/rest/v1/gd_settings?on_conflict=key',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify([{key:'farm_logo',value:b64,updated_at:new Date().toISOString()}])
+      });
+      if(r.ok){
+        setSyncStatus('✓ Logo saved — visible on all devices','#1D9E75');
+        setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+        // Remove old download button if any
+        const old=document.getElementById('logo-dl-msg');if(old)old.remove();
+      } else {
+        setSyncStatus('✓ Logo saved locally','#888');
+        setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+      }
+    }catch(e){
+      setSyncStatus('✓ Logo saved locally','#888');
+      setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+    }
   };
   reader.readAsDataURL(file);
 }
 
-function showLogoDownloadBtn(b64){
-  const card=document.getElementById('logo-upload-card');
-  if(!card)return;
-  const old=document.getElementById('logo-dl-msg');if(old)old.remove();
-  const msg=document.createElement('div');
-  msg.id='logo-dl-msg';
-  msg.style.cssText='margin-top:10px;padding:10px 14px;background:#E1F5EE;border:1px solid #9FE1CB;border-radius:8px;font-size:12px;color:#0F6E56;';
-  msg.innerHTML='<strong>✓ Logo uploaded!</strong> Click below to download the updated app file, then deploy it to Netlify to show the logo on all devices.<br><br><button id="logo-dl-btn" style="background:#0F6E56;color:#fff;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600;margin-top:4px;">⬇ Download updated index.html</button>';
-  card.appendChild(msg);
-  document.getElementById('logo-dl-btn').onclick=()=>downloadWithLogo(b64);
-}
-
-async function downloadWithLogo(b64){
-  try{
-    setSyncStatus('⟳ Preparing download…','#f0a500');
-    // Fetch the raw HTML file from the server
-    const response=await fetch(window.location.href);
-    let html=await response.text();
-    // Replace the empty logo variable with the actual base64 logo
-    html=html.replace(
-      /const HARDCODED_LOGO = '[^']*';/,
-      "const HARDCODED_LOGO = '"+b64+"';"
-    );
-    const blob=new Blob([html],{type:'text/html'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;
-    a.download='index.html';
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    setSyncStatus('✓ Downloaded — deploy to Netlify','#1D9E75');
-    setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),5000);
-  }catch(err){
-    console.warn('Download error:',err);
-    // Fallback: use outerHTML
-    let html=document.documentElement.outerHTML;
-    html=html.replace(
-      /const HARDCODED_LOGO = '[^']*';/,
-      "const HARDCODED_LOGO = '"+b64+"';"
-    );
-    const blob=new Blob([html],{type:'text/html'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;a.download='index.html';
-    document.body.appendChild(a);a.click();document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-  }
-}
 function applyFarmLogo(b64){
   const li=document.getElementById('login-logo-img');
   const le=document.getElementById('login-logo-emoji');
-  if(b64&&li){li.src=b64;li.style.display='block';if(le)le.style.display='none';}
+  if(b64&&b64.length>10&&li){li.src=b64;li.style.display='block';if(le)le.style.display='none';}
   else if(li){li.style.display='none';if(le)le.style.display='block';}
   const ti=document.getElementById('topbar-logo-img');
   const te=document.getElementById('topbar-logo-emoji');
-  if(b64&&ti){ti.src=b64;ti.style.display='block';if(te)te.style.display='none';}
+  if(b64&&b64.length>10&&ti){ti.src=b64;ti.style.display='block';if(te)te.style.display='none';}
   else if(ti){ti.style.display='none';if(te)te.style.display='block';}
+  // Update dash preview
+  const dp=document.getElementById('dash-logo-preview');
+  if(dp&&b64&&b64.length>10)dp.innerHTML=`<img src="${b64}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">`;
 }
-async function loadFarmLogo(){
-  // Apply local immediately
-  try{const saved=localStorage.getItem('goudhan-logo');if(saved)applyFarmLogo(saved);}catch(e){}
-  // Then fetch from Supabase
-  const sb=await getSBAsync();
-  if(sb){
-    try{
-      const {data,error}=await sb.from('gd_settings').select('value').eq('key','farm_logo').single();
-      if(!error&&data?.value){
-        applyFarmLogo(data.value);
-        try{localStorage.setItem('goudhan-logo',data.value);}catch(e){}
-      }
-    }catch(err){}
-  }
-}
-// fetchLogoOnLoad called at bottom of script after all functions defined
+
 function updateDashLogoPreview(input){
   if(!input.files[0])return;
   const r=new FileReader();
@@ -1122,32 +1092,32 @@ function updateDashLogoPreview(input){
   };
   r.readAsDataURL(input.files[0]);
 }
+
 function showLogoCardIfAdmin(){
   const card=document.getElementById('logo-upload-card');
   const isAdmin=(currentRole==='admin');
   if(card)card.style.display=isAdmin?'block':'none';
-  try{
-    const saved=localStorage.getItem('goudhan-logo');
-    if(saved){const p=document.getElementById('dash-logo-preview');if(p)p.innerHTML=`<img src="${saved}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;">`;}
-  }catch(e){}
-}
-function fetchLogoOnLoad(){
-  // 1. Hardcoded logo (baked into file — works on ALL devices, no internet needed)
-  if(HARDCODED_LOGO){applyFarmLogo(HARDCODED_LOGO);return;}
-  // 2. localStorage (same device only)
-  try{const saved=localStorage.getItem('goudhan-logo');if(saved){applyFarmLogo(saved);}}catch(e){}
-  // 3. Supabase (requires internet + library load)
-  async function fetchFromCloud(){
-    const sb=await getSBAsync(5000);
-    if(!sb)return;
-    try{
-      const {data}=await sb.from('gd_settings').select('value').eq('key','farm_logo').maybeSingle();
-      if(data?.value){applyFarmLogo(data.value);try{localStorage.setItem('goudhan-logo',data.value);}catch(e){}}
-    }catch(err){}
-  }
-  fetchFromCloud();
 }
 
+async function fetchLogoOnLoad(){
+  // 1. Apply hardcoded logo instantly if available
+  if(HARDCODED_LOGO&&HARDCODED_LOGO.length>10){applyFarmLogo(HARDCODED_LOGO);return;}
+  // 2. Apply from localStorage instantly
+  try{const saved=localStorage.getItem('goudhan-logo');if(saved&&saved.length>10)applyFarmLogo(saved);}catch(e){}
+  // 3. Fetch from Supabase using direct fetch (reliable on all devices)
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_settings?key=eq.farm_logo&select=value',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(r.ok){
+      const data=await r.json();
+      if(data&&data.length&&data[0].value&&data[0].value.length>10){
+        applyFarmLogo(data[0].value);
+        try{localStorage.setItem('goudhan-logo',data[0].value);}catch(e){}
+      }
+    }
+  }catch(e){console.warn('Logo fetch error:',e);}
+}
 
 // ── REMEMBER ME ──
 function handleRememberMe(){
@@ -2192,6 +2162,88 @@ function clearPending(){
 
 function render(){renderAlerts();rMetrics();renderOvMilk();renderOvPreg();renderOvHealth();renderOvLog();renderOvLact();renderOvDep();renderMilkMetrics();renderMilk();renderMilkSummary();renderDailyReport();renderAnimals();renderPreg();renderLact();renderHealth();renderLog();renderDep();renderUsers();checkBackupReminder();}
 
+// ── FARM SETTINGS ──
+let farmSettings={name:'GiRDHAAM',tagline:'Gau Seva · Gau Samridhi',appname:'GauDhan',subtitle:'Gauvansh Management System'};
+
+function applyFarmSettings(s){
+  farmSettings=Object.assign(farmSettings,s);
+  const setEl=(id,val)=>{if(val){const el=document.getElementById(id);if(el)el.textContent=val;}};
+  setEl('login-org-name',s.name);
+  setEl('login-org-tagline',s.tagline);
+  setEl('login-farm-name-el',s.appname);
+  setEl('login-tagline-el',s.subtitle);
+  setEl('topbar-farm-name',s.name);
+  if(s.appname||s.name)document.title=(s.appname||'GauDhan')+' — '+(s.name||'GiRDHAAM');
+  try{localStorage.setItem('gd-farm-settings',JSON.stringify(farmSettings));}catch(e){}
+}
+
+async function loadFarmSettings(){
+  // Load from localStorage instantly
+  try{
+    const cached=localStorage.getItem('gd-farm-settings');
+    if(cached)applyFarmSettings(JSON.parse(cached));
+  }catch(e){}
+  // Then fetch from Supabase
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_settings?key=in.(farm_name,farm_tagline,farm_appname,farm_subtitle)&select=key,value',{
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY}
+    });
+    if(r.ok){
+      const data=await r.json();
+      const s={};
+      data.forEach(row=>{
+        if(row.key==='farm_name')s.name=row.value;
+        if(row.key==='farm_tagline')s.tagline=row.value;
+        if(row.key==='farm_appname')s.appname=row.value;
+        if(row.key==='farm_subtitle')s.subtitle=row.value;
+      });
+      if(Object.keys(s).length)applyFarmSettings(s);
+    }
+  }catch(e){console.warn('Farm settings load error:',e);}
+}
+
+function openFarmSettings(){
+  document.getElementById('fs-name').value=farmSettings.name||'';
+  document.getElementById('fs-tagline').value=farmSettings.tagline||'';
+  document.getElementById('fs-appname').value=farmSettings.appname||'';
+  document.getElementById('fs-subtitle').value=farmSettings.subtitle||'';
+  openModal('farm-settings-modal');
+}
+
+async function saveFarmSettings(){
+  const name=document.getElementById('fs-name').value.trim();
+  const tagline=document.getElementById('fs-tagline').value.trim();
+  const appname=document.getElementById('fs-appname').value.trim();
+  const subtitle=document.getElementById('fs-subtitle').value.trim();
+  if(!name){showValidationError('Farm name is required.');return;}
+  // Apply immediately
+  applyFarmSettings({name,tagline,appname,subtitle});
+  // Save to Supabase
+  const updates=[
+    {key:'farm_name',value:name,updated_at:new Date().toISOString()},
+    {key:'farm_tagline',value:tagline,updated_at:new Date().toISOString()},
+    {key:'farm_appname',value:appname,updated_at:new Date().toISOString()},
+    {key:'farm_subtitle',value:subtitle,updated_at:new Date().toISOString()},
+  ];
+  try{
+    const r=await fetch(SB_URL+'/rest/v1/gd_settings?on_conflict=key',{
+      method:'POST',
+      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+      body:JSON.stringify(updates)
+    });
+    if(r.ok){
+      setSyncStatus('✓ Farm details saved','#1D9E75');
+      setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+      closeModal('farm-settings-modal');
+    } else {
+      const e=await r.json().catch(()=>({}));
+      showValidationError('Save error: '+JSON.stringify(e));
+    }
+  }catch(e){
+    showValidationError('Network error: '+e.message);
+  }
+}
+
 // ── USER MANAGEMENT ──
 let editingUserId=null;
 let cloudUsers=[]; // users loaded from Supabase
@@ -2906,6 +2958,7 @@ function exportXL(type){
 
 // Fetch logo on page load — runs after all functions defined
 setTimeout(fetchLogoOnLoad, 500);
+setTimeout(loadFarmSettings, 600);
 </script>
 </body>
 </html>
