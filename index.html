@@ -384,6 +384,8 @@ window.onerror=function(msg,src,line,col,err){
           If you cleared Supabase data but old data still shows — tap below to clear the local device cache and reload fresh from Supabase.
           <br><br>
           <a href="javascript:void(0)" onclick="['gd2-animals','gd2-preg','gd2-lact','gd2-log','gd2-health','gd2-milk','gd2-has-real-data'].forEach(function(k){localStorage.removeItem(k)});location.reload();" style="color:#c0392b;font-weight:600;text-decoration:underline;">↺ Clear local cache &amp; reload</a>
+          &nbsp;&nbsp;
+          <a href="javascript:void(0)" onclick="doAutoBackup();" style="color:#0F6E56;font-weight:600;text-decoration:underline;">💾 Download backup</a>
         </div>
       </div>
 
@@ -1403,7 +1405,7 @@ async function syncToCloud(){
     if(L.length)await sb.from('gd_lactation').upsert(L.map(lactToDb),{onConflict:'id',ignoreDuplicates:false});
     if(H.length)await sb.from('gd_health').upsert(H.map(healthToDb),{onConflict:'id',ignoreDuplicates:false});
     if(G.length){await sb.from('gd_log').insert(G.slice(0,3).map(logToDb)).select();}
-    setSyncStatus('✓ Synced','#1D9E75');
+    clearPending();setSyncStatus('✓ Synced','#1D9E75');
     setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
   }catch(err){
     setSyncStatus('● Sync error','#e88');
@@ -1455,6 +1457,7 @@ async function loadFromCloud(){
 // ── MAIN SAVE — local first, then cloud async ──
 function save(){
   saveLocal();
+  if(!isOnline)incrementPending();
   clearTimeout(window._syncTimer);
   window._syncTimer=setTimeout(syncToCloud,800);
 }
@@ -1681,12 +1684,16 @@ function updateMilkSessionUI(){const s=document.getElementById('m-session').valu
 function calcMilkTotal(){const mo=parseFloat(document.getElementById('m-morn').value)||0,ev=parseFloat(document.getElementById('m-eve').value)||0;document.getElementById('m-total-display').textContent=(mo+ev)>0?(mo+ev).toFixed(1)+' L':'—';}
 function addMilk(){
   const date=v('m-date'),cow=v('m-cow'),session=document.getElementById('m-session')?document.getElementById('m-session').value:'both';
-  if(!date){alert('Date required.');return;}if(!cow){alert('Select a cow.');return;}
+  if(!date){showValidationError('Date required.');return;}
+  if(!cow){showValidationError('Select a cow.');return;}
+  const dateErr=validateDate(date,'Milk date');if(dateErr){showValidationError(dateErr);return;}
   const moRaw=document.getElementById('m-morn').value,evRaw=document.getElementById('m-eve').value;
-  const mo=moRaw!==''?parseFloat(moRaw):null,ev=evRaw!==''?parseFloat(evRaw):null;
-  if(session==='morning'&&mo===null){alert('Enter morning yield.');return;}
-  if(session==='evening'&&ev===null){alert('Enter evening yield.');return;}
-  if(session==='both'&&mo===null&&ev===null){alert('Enter at least one value.');return;}
+  const mo=moRaw!==''?parseInt(moRaw):null,ev=evRaw!==''?parseInt(evRaw):null;
+  if(session==='morning'&&mo===null){showValidationError('Enter morning yield.');return;}
+  if(session==='evening'&&ev===null){showValidationError('Enter evening yield.');return;}
+  if(session==='both'&&mo===null&&ev===null){showValidationError('Enter at least one value.');return;}
+  const moErr=validateMilkQty(mo,'Morning yield');if(moErr){showValidationError(moErr);return;}
+  const evErr=validateMilkQty(ev,'Evening yield');if(evErr){showValidationError(evErr);return;}
   const idx=M.findIndex(r=>r.cow===cow&&r.date===date);
   if(idx>=0){const rec=M[idx];if(session==='morning'||session==='both')rec.morn=mo;if(session==='evening'||session==='both')rec.eve=ev;rec.partial=rec.morn===null||rec.eve===null;}
   else{const nr={id:Date.now(),cow,date,morn:session==='evening'?null:mo,eve:session==='morning'?null:ev};nr.partial=nr.morn===null||nr.eve===null;M.push(nr);}
@@ -1897,7 +1904,32 @@ function exportMilkExcel(){
 }
 
 // ---- GODHAN CRUD ----
-function addAnimal(){const tag=v('a-tag');if(!tag){alert('Tag required.');return;}if(A.find(a=>a.tag===tag)){alert('Tag already exists.');return;}const type=v('a-type'),reason=v('a-reason'),donor=v('a-donor'),dondate=v('a-dondate'),lactnum=v('a-lactnum');if(reason==='Donation'&&!donor){alert('Donor name required.');return;}if(reason==='Donation'&&!dondate){alert('Donation date required.');return;}const animal={tagSlNo:v('a-tagslno'),tag,name:v('a-name'),type,breed:v('a-breed')||'Gir',dob:v('a-dob'),sex:v('a-sex'),sire:v('a-sire'),dam:v('a-dam'),reason,adddate:v('a-adddate')||today(),notes:v('a-notes'),status:'Active',lactnum:lactnum||'',donor:reason==='Donation'?donor:'',dondate:reason==='Donation'?dondate:'',photo:pendingPhotoB64||''};A.push(animal);if(type==='Cow'&&lactnum)L.push({cow:tag,num:lactnum,start:v('a-lactstart'),end:'',total:v('a-lacttotal'),peak:v('a-lactpeak'),notes:'At addition',source:'manual',id:Date.now()});G.unshift({date:animal.adddate,tag,name:animal.name,type,action:'Added',reason,loggedBy:currentUser,donor:animal.donor,dondate:animal.dondate,notes:animal.notes});populateCows();save();render();closeModal('animal-modal');['a-tagslno','a-tag','a-name','a-sire','a-dam','a-notes','a-lactnum','a-lacttotal','a-lactpeak','a-donor'].forEach(id=>document.getElementById(id).value='');['a-lactstart','a-dondate','a-dob','a-adddate'].forEach(id=>document.getElementById(id).value='');document.getElementById('a-breed').value='Gir';document.getElementById('a-reason').value='Born on farm';document.getElementById('donation-fields').style.display='none';document.getElementById('a-photo-input').value='';if(document.getElementById('a-photo-gallery'))document.getElementById('a-photo-gallery').value='';document.getElementById('a-photo-preview').style.display='none';document.getElementById('a-photo-placeholder').style.display='block';pendingPhotoB64='';}
+function addAnimal(){
+  const tag=v('a-tag');const type=v('a-type');
+  if(!tag){showValidationError('Tag is required.');return;}
+  const tagErr=validateTag(tag,type);
+  if(tagErr){showValidationError(tagErr);return;}
+  if(A.find(a=>a.tag===tag)){showValidationError('Tag '+tag+' already exists. Please use a unique tag.');return;}
+  const dobErr=validateDate(v('a-dob'),'Date of birth');if(dobErr){showValidationError(dobErr);return;}
+  const adddateErr=validateDate(v('a-adddate'),'Addition date');if(adddateErr){showValidationError(adddateErr);return;}
+  const reason=v('a-reason'),donor=v('a-donor'),dondate=v('a-dondate'),lactnum=v('a-lactnum');
+  if(reason==='Donation'&&!donor){showValidationError('Donor name required.');return;}
+  if(reason==='Donation'&&!dondate){showValidationError('Donation date required.');return;}
+  const animal={tagSlNo:v('a-tagslno'),tag,name:v('a-name'),type,breed:v('a-breed')||'Gir',dob:v('a-dob'),sex:v('a-sex'),sire:v('a-sire'),dam:v('a-dam'),reason,adddate:v('a-adddate')||today(),notes:v('a-notes'),status:'Active',lactnum:lactnum||'',donor:reason==='Donation'?donor:'',dondate:reason==='Donation'?dondate:'',photo:pendingPhotoB64||''};
+  A.push(animal);
+  if(type==='Cow'&&lactnum)L.push({cow:tag,num:lactnum,start:v('a-lactstart'),end:'',total:v('a-lacttotal'),peak:v('a-lactpeak'),notes:'At addition',source:'manual',id:Date.now()});
+  G.unshift({date:animal.adddate,tag,name:animal.name,type,action:'Added',reason,loggedBy:currentUser,donor:animal.donor,dondate:animal.dondate,notes:animal.notes});
+  populateCows();save();render();closeModal('animal-modal');
+  ['a-tagslno','a-tag','a-name','a-sire','a-dam','a-notes','a-lactnum','a-lacttotal','a-lactpeak','a-donor'].forEach(id=>document.getElementById(id).value='');
+  ['a-lactstart','a-dondate','a-dob','a-adddate'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('a-breed').value='Gir';document.getElementById('a-reason').value='Born on farm';
+  document.getElementById('donation-fields').style.display='none';
+  document.getElementById('a-photo-input').value='';
+  if(document.getElementById('a-photo-gallery'))document.getElementById('a-photo-gallery').value='';
+  document.getElementById('a-photo-preview').style.display='none';
+  document.getElementById('a-photo-placeholder').style.display='block';
+  pendingPhotoB64='';
+}
 function deleteAnimal(tag){
   const a=A.find(x=>x.tag===tag);
   if(!confirm(`Remove ${a?.name||tag} from farm? This will move them to Departures.`))return;
@@ -2011,7 +2043,154 @@ function saveEditHealth(){
 function showDetail(tag){
   editingDetailTag=tag;const a=A.find(x=>x.tag===tag);if(!a)return;document.getElementById('detail-title').textContent=(a.name?a.name+' — ':'')+a.tag;const aP=P.filter(p=>p.cow===tag),aL=L.filter(l=>l.cow===tag),aH=H.filter(h=>h.tag===tag),aM=M.filter(m=>m.cow===tag).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,7);const fA=A.find(x=>x.tag===a.sire),mA=A.find(x=>x.tag===a.dam),off=A.filter(x=>x.sire===tag||x.dam===tag);let html=`<div class="detail-top">${detailPhotoHtml(a.photo,a.type)}<div class="detail-top-info"><div class="ds" style="margin-bottom:0;"><h4>Profile</h4><div class="dg"><div class="di"><span>Tag Sl. No.</span>${a.tagSlNo||'—'}</div><div class="di"><span>Tag</span>${a.tag}</div><div class="di"><span>Name</span>${a.name||'—'}</div><div class="di"><span>Type</span>${tb(a.type)}</div><div class="di"><span>Breed</span>${a.breed||'—'}</div><div class="di"><span>DOB</span>${fmt(a.dob)}</div><div class="di"><span>Sex</span>${a.sex||'—'}</div><div class="di"><span>Status</span>${sb(a.status)}</div><div class="di"><span>Lactation #</span>${a.lactnum||'—'}</div><div class="di"><span>Added via</span>${a.reason==='Donation'?'<span class="badge badge-donation">Donation</span>':a.reason||'—'}</div><div class="di"><span>Added on</span>${fmt(a.adddate)}</div>${a.reason==='Donation'?`<div class="di"><span>Donor</span>${a.donor||'—'}</div><div class="di"><span>Donation date</span>${fmt(a.dondate)}</div>`:''}</div></div></div></div>`;html+=`<div class="ds"><h4>Pedigree</h4><div class="dg"><div class="di"><span>Father</span>${a.sire?(fA?`<button class="lb" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${a.sire}'),100)">${a.sire}${fA.name?' — '+fA.name:''}</button>`:a.sire):'—'}</div><div class="di"><span>Mother</span>${a.dam?(mA?`<button class="lb" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${a.dam}'),100)">${a.dam}${mA.name?' — '+mA.name:''}</button>`:a.dam):'—'}</div></div>${off.length?`<div style="margin-top:8px;font-size:13px;"><span style="font-size:11px;color:#888;">Offspring: </span>${off.map(o=>`<button class="lb" style="margin-right:8px;" onclick="closeModal('detail-modal');setTimeout(()=>showDetail('${o.tag}'),100)">${o.tag}${o.name?' ('+o.name+')':''}</button>`).join('')}</div>`:''}</div>`;if(aM.length)html+=`<div class="ds"><h4>Recent milk records</h4><table><thead><tr><th>Date</th><th>Morning</th><th>Evening</th><th>Total</th></tr></thead><tbody>${aM.map(m=>`<tr><td>${fmt(m.date)}</td><td>${fl(m.morn)}</td><td>${fl(m.eve)}</td><td><strong>${(parseFloat(m.morn||0)+parseFloat(m.eve||0)).toFixed(1)}L</strong></td></tr>`).join('')}</tbody></table></div>`;if(aP.length)html+=`<div class="ds"><h4>Pregnancy records</h4><table><thead><tr><th>Insem.</th><th>Expected delivery</th><th>Method</th><th>Status</th><th>Calf / Heifer</th></tr></thead><tbody>${aP.map(p=>`<tr><td>${fmt(p.insem)}</td><td>${fmt(p.calving)}</td><td>${p.method}</td><td>${sb(p.status)}</td><td>${p.outcome||'—'}</td></tr>`).join('')}</tbody></table></div>`;if(aL.length)html+=`<div class="ds"><h4>Lactation records</h4><table><thead><tr><th>Cycle #</th><th>Source</th><th>Start</th><th>End</th><th>Total (L)</th><th>Peak</th></tr></thead><tbody>${aL.sort((a,b)=>(parseInt(a.num)||0)-(parseInt(b.num)||0)).map(l=>`<tr><td>${l.num||'—'}</td><td>${l.source==='auto'?'<span class="badge badge-auto">auto</span>':'Manual'}</td><td>${fmt(l.start)}</td><td>${fmt(l.end)}</td><td>${l.total?Number(l.total).toLocaleString():'—'}</td><td>${l.peak||'—'}</td></tr>`).join('')}</tbody></table></div>`;if(aH.length)html+=`<div class="ds"><h4>Health records</h4><table><thead><tr><th>Date</th><th>Type</th><th>Condition</th><th>Treatment</th><th>Next due</th></tr></thead><tbody>${aH.map(h=>`<tr><td>${fmt(h.date)}</td><td>${h.type}</td><td>${h.diag||'—'}</td><td>${h.drug||'—'}</td><td>${fmt(h.next)}</td></tr>`).join('')}</tbody></table></div>`;if(a.status==='Inactive'){let dep='';if(a.delreason==='Sold')dep=`<div class="di"><span>Purchaser</span>${a.delpurchaser||'—'}</div><div class="di"><span>Price</span>${a.delprice?'₹'+Number(a.delprice).toLocaleString():'—'}</div>`;else if(a.delreason?.startsWith('Died'))dep=`<div class="di"><span>Cause</span>${a.delcause||'—'}</div>`;else if(a.delreason==='Transfer out')dep=`<div class="di"><span>Destination</span>${a.deldestination||'—'}</div>`;else if(a.delreason==='Donated')dep=`<div class="di"><span>Donated to</span>${a.deldonateto||'—'}</div>`;html+=`<div class="ds"><h4>Departure details</h4><div class="dg"><div class="di"><span>Date</span>${fmt(a.deldate)}</div><div class="di"><span>Reason</span>${rb(a.delreason)}</div>${dep}<div class="di"><span>Notes</span>${a.delnotes||'—'}</div></div></div>`;}document.getElementById('detail-body').innerHTML=html;const editBtn=document.getElementById('detail-edit-btn');if(editBtn)editBtn.style.display=a.status==='Inactive'?'none':'inline-block';openModal('detail-modal');}
 
-function render(){renderAlerts();rMetrics();renderOvMilk();renderOvPreg();renderOvHealth();renderOvLog();renderOvLact();renderOvDep();renderMilkMetrics();renderMilk();renderMilkSummary();renderDailyReport();renderAnimals();renderPreg();renderLact();renderHealth();renderLog();renderDep();renderUsers();}
+// ═══════════════════════════════════════════════
+// FEATURE 1 — DATA VALIDATION
+// ═══════════════════════════════════════════════
+function validateTag(tag, type){
+  // C- for Cow/Heifer, B- for Bull/Calf
+  if(!tag)return'Tag is required.';
+  const cowPattern=/^[A-Z]+-\d{3,}$/;
+  if(!cowPattern.test(tag))return'Tag must be in format like C-001 or B-001 (letters, dash, 3+ digits).';
+  if((type==='Cow'||type==='Heifer')&&!tag.startsWith('C-'))return'Cows and Heifers must use C- prefix (e.g. C-001).';
+  if((type==='Bull'||type==='Calf')&&!tag.startsWith('B-'))return'Bulls and Calves must use B- prefix (e.g. B-001).';
+  return null; // valid
+}
+
+function validateDate(dateStr, fieldName, allowFuture=false){
+  if(!dateStr)return null; // optional fields pass
+  const d=new Date(dateStr);
+  if(isNaN(d))return fieldName+' is not a valid date.';
+  if(!allowFuture&&d>new Date())return fieldName+' cannot be a future date.';
+  const minDate=new Date('1990-01-01');
+  if(d<minDate)return fieldName+' seems too far in the past. Please check.';
+  return null;
+}
+
+function validateMilkQty(val, fieldName, maxL=50){
+  if(val===null||val===undefined||val==='')return null;
+  const n=parseFloat(val);
+  if(isNaN(n)||n<0)return fieldName+' must be a positive number.';
+  if(n>maxL)return`${fieldName} of ${n}L seems unusually high (max ${maxL}L). Please verify.`;
+  return null;
+}
+
+function showValidationError(msg){
+  // Show inline error — no alert() so user doesn't lose their data
+  let el=document.getElementById('validation-error-banner');
+  if(!el){
+    el=document.createElement('div');
+    el.id='validation-error-banner';
+    el.style.cssText='position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#e74c3c;color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;z-index:999;box-shadow:0 4px 12px rgba(0,0,0,0.2);max-width:90vw;text-align:center;';
+    document.body.appendChild(el);
+  }
+  el.textContent='⚠ '+msg;
+  el.style.display='block';
+  clearTimeout(window._validTimer);
+  window._validTimer=setTimeout(()=>{el.style.display='none';},4000);
+  return false;
+}
+
+// ═══════════════════════════════════════════════
+// FEATURE 2 — AUTO BACKUP & REMINDER
+// ═══════════════════════════════════════════════
+function checkBackupReminder(){
+  if(currentRole!=='admin')return;
+  const lastBackup=localStorage.getItem('gd-last-backup');
+  const now=Date.now();
+  const week=7*24*60*60*1000;
+  if(!lastBackup||now-parseInt(lastBackup)>week){
+    // Add backup reminder to alerts
+    const banner=document.getElementById('calving-alerts');
+    if(banner&&!banner.innerHTML.includes('backup')){
+      const existing=banner.innerHTML;
+      banner.innerHTML=`<div class="alert-banner" style="background:#fff8e0;border-color:#f0a500;color:#856404;cursor:pointer;" onclick="doAutoBackup()">
+        💾 <strong>Weekly backup due</strong> — Last backup: ${lastBackup?new Date(parseInt(lastBackup)).toLocaleDateString('en-IN'):'Never'} &nbsp;<span style="text-decoration:underline;">Download backup now →</span>
+      </div>`+(existing?'<br>'+existing:'');
+    }
+  }
+}
+
+function doAutoBackup(){
+  // Export all data as Excel with multiple sheets
+  if(typeof XLSX==='undefined'){alert('Excel library not loaded yet. Please try again in a moment.');return;}
+  const wb=XLSX.utils.book_new();
+  // Animals sheet
+  const aRows=[['Tag','Tag Sl No','Name','Type','Breed','DOB','Sex','Status','Lactation#','Added Via','Added Date','Notes'],...A.map(a=>[a.tag,a.tagSlNo||'',a.name||'',a.type||'',a.breed||'',a.dob||'',a.sex||'',a.status||'',a.lactnum||'',a.reason||'',a.adddate||'',a.notes||''])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(aRows),'Animals');
+  // Milk sheet
+  const mRows=[['Date','Cow','Morning(L)','Evening(L)','Total(L)'],...M.map(m=>[m.date,m.cow,m.morn??'',m.eve??'',(parseFloat(m.morn||0)+parseFloat(m.eve||0)).toFixed(1)])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(mRows),'Milk');
+  // Health sheet
+  const hRows=[['Date','Tag','Type','Diagnosis','Drug','Dose','Vet','Next Due','Notes'],...H.map(h=>[h.date,h.tag,h.type,h.diag||'',h.drug||'',h.dose||'',h.vet||'',h.next||'',h.notes||''])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(hRows),'Health');
+  // Pregnancy sheet
+  const pRows=[['Cow','Insem Date','Sire','Method','Expected','Status','Outcome','Notes'],...P.map(p=>[p.cow,p.insem,p.sire||'',p.method||'',p.calving||'',p.status||'',p.outcome||'',p.notes||''])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(pRows),'Pregnancy');
+  // Lactation sheet
+  const lRows=[['Cow','Lact#','Start','End','Total(L)','Peak(L)','Notes'],...L.map(l=>[l.cow,l.num||'',l.start||'',l.end||'',l.total||'',l.peak||'',l.notes||''])];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(lRows),'Lactation');
+  // Info sheet
+  const info=[['GiRDHAAM — GauDhan Backup'],['Exported on',new Date().toLocaleString('en-IN')],['Animals',A.length],['Milk records',M.length],['Health records',H.length]];
+  XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(info),'Info');
+  const date=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,`GiRDHAAM_GauDhan_Backup_${date}.xlsx`);
+  localStorage.setItem('gd-last-backup',String(Date.now()));
+  setSyncStatus('✓ Backup downloaded','#1D9E75');
+  setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+  // Dismiss backup reminder
+  const banner=document.getElementById('calving-alerts');
+  if(banner)banner.innerHTML='';
+}
+
+// ═══════════════════════════════════════════════
+// FEATURE 3 — OFFLINE SYNC QUEUE
+// ═══════════════════════════════════════════════
+let isOnline=navigator.onLine;
+let pendingSyncCount=0;
+
+window.addEventListener('online',()=>{
+  isOnline=true;
+  updateOnlineStatus();
+  // Auto-sync when back online
+  if(pendingSyncCount>0){
+    setSyncStatus('⟳ Back online — syncing…','#f0a500');
+    setTimeout(syncToCloud,1000);
+  }
+});
+
+window.addEventListener('offline',()=>{
+  isOnline=false;
+  updateOnlineStatus();
+  setSyncStatus('● Offline','#e88');
+});
+
+function updateOnlineStatus(){
+  const el=document.getElementById('sync-status');
+  if(!el)return;
+  if(!isOnline){
+    const pending=getPendingChanges();
+    el.textContent=pending>0?`● Offline (${pending} pending)`:'● Offline';
+    el.style.color='#e88';
+  }
+}
+
+function getPendingChanges(){
+  try{return parseInt(localStorage.getItem('gd-pending-changes')||'0');}catch(e){return 0;}
+}
+
+function incrementPending(){
+  const n=getPendingChanges()+1;
+  try{localStorage.setItem('gd-pending-changes',String(n));}catch(e){}
+  pendingSyncCount=n;
+  if(!isOnline)updateOnlineStatus();
+}
+
+function clearPending(){
+  try{localStorage.removeItem('gd-pending-changes');}catch(e){}
+  pendingSyncCount=0;
+}
+
+function render(){renderAlerts();rMetrics();renderOvMilk();renderOvPreg();renderOvHealth();renderOvLog();renderOvLact();renderOvDep();renderMilkMetrics();renderMilk();renderMilkSummary();renderDailyReport();renderAnimals();renderPreg();renderLact();renderHealth();renderLog();renderDep();renderUsers();checkBackupReminder();}
 
 // ── USER MANAGEMENT ──
 let editingUserId=null;
