@@ -503,12 +503,15 @@ window.onerror=function(msg,src,line,col,err){
       <div class="card">
         <div class="section-head">
           <h3>Daily cow-wise milk report</h3>
-          <div class="section-head-actions">
-            <label style="font-size:12px;color:#5a8a78;font-weight:600;">Date:</label>
-            <input type="date" id="daily-report-date" onchange="renderDailyReport()" style="width:auto;font-size:13px;padding:5px 8px;">
+          <div class="section-head-actions" style="flex-wrap:wrap;gap:6px;">
+            <button class="btn btn-sm" id="btn-today" onclick="setReportDate('today')" style="background:#1D9E75;color:#fff;border-color:#1D9E75;">Today</button>
+            <button class="btn btn-sm" id="btn-yesterday" onclick="setReportDate('yesterday')">Yesterday</button>
+            <input type="date" id="daily-report-date" onchange="renderDailyReport();updateReportBtns()" style="width:auto;font-size:13px;padding:5px 8px;">
             <button class="btn btn-sm btn-success" onclick="printDailyReport()">🖨 Print</button>
           </div>
         </div>
+        <!-- Date summary bar -->
+        <div id="daily-report-summary-bar" style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 14px;background:#f0faf5;border-radius:8px;margin-bottom:12px;font-size:13px;"></div>
         <div id="daily-report-body"></div>
       </div>
 
@@ -1244,6 +1247,7 @@ async function doLogin(){
   const td=today();
   document.getElementById('m-date').value=td;
   const drEl=document.getElementById('daily-report-date');if(drEl)drEl.value=td;
+  setTimeout(updateReportBtns,200);
   const ym=td.slice(0,7);
   document.getElementById('milk-filter-month').value=ym;
   document.getElementById('milk-summary-month').value=ym;
@@ -1721,12 +1725,59 @@ function saveMilkEdit(){
 }
 
 // ---- DAILY COW-WISE REPORT ----
+function setReportDate(when){
+  const dateEl=document.getElementById('daily-report-date');
+  if(!dateEl)return;
+  if(when==='today'){
+    dateEl.value=today();
+  } else if(when==='yesterday'){
+    const yd=new Date();yd.setDate(yd.getDate()-1);
+    dateEl.value=yd.toISOString().slice(0,10);
+  }
+  updateReportBtns();
+  renderDailyReport();
+}
+function updateReportBtns(){
+  const dateEl=document.getElementById('daily-report-date');
+  const val=dateEl?dateEl.value:'';
+  const todayBtn=document.getElementById('btn-today');
+  const yestBtn=document.getElementById('btn-yesterday');
+  const yd=new Date();yd.setDate(yd.getDate()-1);
+  const ydStr=yd.toISOString().slice(0,10);
+  if(todayBtn){todayBtn.style.background=val===today()?'#0F6E56':'';todayBtn.style.color=val===today()?'#fff':'';todayBtn.style.borderColor=val===today()?'#0F6E56':'';}
+  if(yestBtn){yestBtn.style.background=val===ydStr?'#0F6E56':'';yestBtn.style.color=val===ydStr?'#fff':'';yestBtn.style.borderColor=val===ydStr?'#0F6E56':'';}
+}
 function renderDailyReport(){
   const el=document.getElementById('daily-report-body');if(!el)return;
   const dateEl=document.getElementById('daily-report-date');
   const selDate=dateEl?dateEl.value:today();
   if(!selDate){el.innerHTML=`<div style="font-size:13px;color:#9abfb2;">Select a date to view the daily report.</div>`;return;}
   const recs=M.filter(r=>r.date===selDate);
+  // Update summary bar
+  const bar=document.getElementById('daily-report-summary-bar');
+  if(bar){
+    if(recs.length){
+      const totalMorn=recs.reduce((s,r)=>s+parseFloat(r.morn||0),0);
+      const totalEve=recs.reduce((s,r)=>s+parseFloat(r.eve||0),0);
+      const totalAll=totalMorn+totalEve;
+      const cowsCount=recs.filter(r=>(parseFloat(r.morn||0)+parseFloat(r.eve||0))>0).length;
+      // Compare with previous day
+      const pd=new Date(selDate);pd.setDate(pd.getDate()-1);const pdStr=pd.toISOString().slice(0,10);
+      const prevRecs=M.filter(r=>r.date===pdStr);
+      const prevTotal=prevRecs.reduce((s,r)=>s+parseFloat(r.morn||0)+parseFloat(r.eve||0),0);
+      const diff=totalAll-prevTotal;
+      const diffStr=prevTotal>0?(diff>=0?`<span style="color:#1D9E75;">▲ ${diff.toFixed(1)}L vs prev day</span>`:`<span style="color:#e74c3c;">▼ ${Math.abs(diff).toFixed(1)}L vs prev day</span>`):'';
+      bar.innerHTML=`
+        <div style="flex:1;min-width:120px;"><span style="font-size:11px;color:#888;">Total</span><br><strong style="font-size:18px;color:#0F6E56;">${totalAll.toFixed(1)}L</strong> ${diffStr}</div>
+        <div style="flex:1;min-width:100px;"><span style="font-size:11px;color:#888;">☀ Morning</span><br><strong>${totalMorn.toFixed(1)}L</strong></div>
+        <div style="flex:1;min-width:100px;"><span style="font-size:11px;color:#888;">🌙 Evening</span><br><strong>${totalEve.toFixed(1)}L</strong></div>
+        <div style="flex:1;min-width:100px;"><span style="font-size:11px;color:#888;">Cows milked</span><br><strong>${cowsCount}</strong></div>
+        <div style="flex:1;min-width:100px;"><span style="font-size:11px;color:#888;">Avg per cow</span><br><strong>${cowsCount>0?(totalAll/cowsCount).toFixed(1):0}L</strong></div>`;
+    } else {
+      bar.innerHTML=`<div style="color:#aaa;font-size:13px;">No milk records for ${fmt(selDate)}.</div>`;
+    }
+  }
+
   const activeCows=A.filter(a=>a.type==='Cow'&&onFarm(a));
   if(!activeCows.length){el.innerHTML=`<div style="font-size:13px;color:#9abfb2;">No cows on farm.</div>`;return;}
   let totalMorn=0,totalEve=0,totalAll=0;
