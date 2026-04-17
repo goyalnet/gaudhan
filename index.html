@@ -2216,31 +2216,36 @@ async function saveFarmSettings(){
   const appname=document.getElementById('fs-appname').value.trim();
   const subtitle=document.getElementById('fs-subtitle').value.trim();
   if(!name){showValidationError('Farm name is required.');return;}
-  // Apply immediately
+  // Apply immediately to UI
   applyFarmSettings({name,tagline,appname,subtitle});
-  // Save to Supabase
-  const updates=[
-    {key:'farm_name',value:name,updated_at:new Date().toISOString()},
-    {key:'farm_tagline',value:tagline,updated_at:new Date().toISOString()},
-    {key:'farm_appname',value:appname,updated_at:new Date().toISOString()},
-    {key:'farm_subtitle',value:subtitle,updated_at:new Date().toISOString()},
+  setSyncStatus('⟳ Saving…','#f0a500');
+  // Save each setting individually
+  const settings=[
+    {key:'farm_name',value:name},
+    {key:'farm_tagline',value:tagline},
+    {key:'farm_appname',value:appname},
+    {key:'farm_subtitle',value:subtitle},
   ];
-  try{
-    const r=await fetch(SB_URL+'/rest/v1/gd_settings?on_conflict=key',{
-      method:'POST',
-      headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
-      body:JSON.stringify(updates)
-    });
-    if(r.ok){
-      setSyncStatus('✓ Farm details saved','#1D9E75');
-      setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
-      closeModal('farm-settings-modal');
-    } else {
-      const e=await r.json().catch(()=>({}));
-      showValidationError('Save error: '+JSON.stringify(e));
-    }
-  }catch(e){
-    showValidationError('Network error: '+e.message);
+  let allOk=true;
+  for(const s of settings){
+    try{
+      const r=await fetch(SB_URL+'/rest/v1/gd_settings?on_conflict=key',{
+        method:'POST',
+        headers:{'apikey':SB_KEY,'Authorization':'Bearer '+SB_KEY,'Content-Type':'application/json','Prefer':'resolution=merge-duplicates,return=minimal'},
+        body:JSON.stringify([{key:s.key,value:s.value,updated_at:new Date().toISOString()}])
+      });
+      if(!r.ok){allOk=false;const e=await r.json().catch(()=>({}));console.warn('Farm setting save error:',s.key,e);}
+    }catch(e){allOk=false;console.warn('Farm setting fetch error:',e);}
+  }
+  if(allOk){
+    setSyncStatus('✓ Farm details saved','#1D9E75');
+    setTimeout(()=>setSyncStatus('☁ Cloud','#aaa'),3000);
+    closeModal('farm-settings-modal');
+    // Cache locally
+    try{localStorage.setItem('gd-farm-settings',JSON.stringify({name,tagline,appname,subtitle}));}catch(e){}
+  } else {
+    setSyncStatus('⚠ Partial save','#f0a500');
+    showValidationError('Some settings may not have saved. Please try again.');
   }
 }
 
