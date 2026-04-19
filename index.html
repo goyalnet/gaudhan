@@ -481,7 +481,7 @@ window.onerror=function(msg,src,line,col,err){
           </div>
         </div>
         <div class="info-banner">Enter milk for all cows at once. Leave blank to skip a cow.</div>
-        <div id="bulk-milk-table"></div>
+        <div id="bulk-milk-table" style="max-height:350px;overflow-y:auto;border:1px solid #e8ede8;border-radius:8px;"></div>
         <div style="margin-top:12px;display:flex;gap:8px;">
           <button class="btn btn-primary" onclick="saveBulkMilk()">Save all</button>
           <span id="bulk-save-msg" style="font-size:12px;color:#1D9E75;font-weight:600;"></span>
@@ -501,24 +501,27 @@ window.onerror=function(msg,src,line,col,err){
 
       <!-- DAILY COW-WISE REPORT -->
       <div class="card">
-        <div class="section-head">
-          <h3>Daily cow-wise milk report</h3>
-          <div class="section-head-actions" style="flex-wrap:wrap;gap:6px;">
+        <div class="section-head" onclick="toggleSection('daily-report-section','daily-report-chevron')" style="cursor:pointer;">
+          <h3>Daily cow-wise milk report <span id="daily-report-chevron" style="font-size:13px;color:#888;transition:transform 0.2s;display:inline-block;">▼</span></h3>
+          <div class="section-head-actions" style="flex-wrap:wrap;gap:6px;" onclick="event.stopPropagation()">
             <button class="btn btn-sm" id="btn-today" onclick="setReportDate('today')" style="background:#1D9E75;color:#fff;border-color:#1D9E75;">Today</button>
             <button class="btn btn-sm" id="btn-yesterday" onclick="setReportDate('yesterday')">Yesterday</button>
             <input type="date" id="daily-report-date" onchange="renderDailyReport();updateReportBtns()" style="width:auto;font-size:13px;padding:5px 8px;">
             <button class="btn btn-sm btn-success" onclick="printDailyReport()">🖨 Print</button>
           </div>
         </div>
-        <!-- Date summary bar -->
-        <div id="daily-report-summary-bar" style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 14px;background:#f0faf5;border-radius:8px;margin-bottom:12px;font-size:13px;"></div>
-        <div id="daily-report-body"></div>
+        <div id="daily-report-section">
+          <!-- Date summary bar -->
+          <div id="daily-report-summary-bar" style="display:flex;gap:12px;flex-wrap:wrap;padding:10px 14px;background:#f0faf5;border-radius:8px;margin-bottom:12px;font-size:13px;"></div>
+          <div id="daily-report-body" style="max-height:320px;overflow-y:auto;border:1px solid #e8ede8;border-radius:8px;padding:4px;"></div>
+        </div>
       </div>
 
       <!-- DAILY RECORDS TABLE -->
       <div class="card">
-        <div class="section-head"><h3>All milk records</h3>
-          <div class="section-head-actions">
+        <div class="section-head" onclick="toggleSection('all-milk-section','all-milk-chevron')" style="cursor:pointer;">
+          <h3>All milk records <span id="all-milk-chevron" style="font-size:13px;color:#888;transition:transform 0.2s;display:inline-block;transform:rotate(-90deg);">▼</span></h3>
+          <div class="section-head-actions" onclick="event.stopPropagation()">
             <label style="font-size:12px;color:#5a8a78;font-weight:600;">Cow:</label>
             <select id="milk-filter-cow" onchange="renderMilk()" style="width:auto;font-size:13px;"><option value="">All cows</option></select>
             <label style="font-size:12px;color:#5a8a78;font-weight:600;">Month:</label>
@@ -526,7 +529,9 @@ window.onerror=function(msg,src,line,col,err){
             <button class="btn btn-sm btn-success" data-role-export onclick="exportMilkExcel()">⬇ Export Excel</button>
           </div>
         </div>
-        <div class="table-wrap"><table><thead><tr><th>Date</th><th>Cow tag</th><th>Name</th><th>Morning (L)</th><th>Evening (L)</th><th>Daily total (L)</th><th>Status</th><th></th></tr></thead><tbody id="milk-table"></tbody></table></div>
+        <div id="all-milk-section" style="display:none;">
+          <div class="table-wrap" style="max-height:350px;overflow-y:auto;border:1px solid #e8ede8;border-radius:8px;"><table><thead style="position:sticky;top:0;background:#fff;z-index:1;"><tr><th>Date</th><th>Cow tag</th><th>Name</th><th>Morning (L)</th><th>Evening (L)</th><th>Daily total (L)</th><th>Status</th><th></th></tr></thead><tbody id="milk-table"></tbody></table></div>
+        </div>
       </div>
 
       <!-- MONTHLY SUMMARY -->
@@ -1725,6 +1730,14 @@ function saveMilkEdit(){
 }
 
 // ---- DAILY COW-WISE REPORT ----
+function toggleSection(sectionId, chevronId){
+  const section=document.getElementById(sectionId);
+  const chevron=document.getElementById(chevronId);
+  if(!section)return;
+  const isHidden=section.style.display==='none';
+  section.style.display=isHidden?'':'none';
+  if(chevron)chevron.style.transform=isHidden?'':'rotate(-90deg)';
+}
 function setReportDate(when){
   const dateEl=document.getElementById('daily-report-date');
   if(!dateEl)return;
@@ -2886,7 +2899,7 @@ function renderBulkMilk(){
   const date=document.getElementById('bulk-date')?.value||today();
   if(!cows.length){el.innerHTML='<div style="font-size:13px;color:#aaa;">No active cows on farm.</div>';return;}
   const showMorn=session!=='evening', showEve=session!=='morning';
-  let html='<div class="table-wrap"><table><thead><tr><th>Tag</th><th>Name</th>';
+  let html='<div class="table-wrap"><table><thead style="position:sticky;top:0;background:#fff;z-index:1;"><tr><th>Tag</th><th>Name</th>';
   if(showMorn)html+='<th>Morning (L)</th>';
   if(showEve)html+='<th>Evening (L)</th>';
   html+='<th>Existing</th></tr></thead><tbody>';
